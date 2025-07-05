@@ -64,7 +64,7 @@ class MemcapacitiveReservoir(nn.Module):
         self.device = torch.device(device) if device is not None else torch.device("cpu")
         self.vectorized = vectorized
 
-        self.W = nn.Parameter(torch.from_numpy(adjacency).to(torch.float32), requires_grad=False)
+        self.W = nn.Parameter(torch.from_numpy(adjacency).to(torch.float32, device=self.device), requires_grad=False)
         self.n_nodes = self.W.shape[0]
 
         rng = torch.Generator(device=self.device).manual_seed(random_seed)
@@ -102,6 +102,8 @@ class MemcapacitiveReservoir(nn.Module):
                     n.reset()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # shape (B, T, input_dim)
+        # Ensure inputs are on same device as parameters
+        x = x.to(self.device)
         B, T, _ = x.shape
         if B != 1:
             raise NotImplementedError("Current implementation supports batch_size=1 (GUI pipeline will wrap batching later)")
