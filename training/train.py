@@ -115,17 +115,23 @@ def run(cfg: Dict[str, Any]):
         from pathlib import Path
         import numpy as np
 
-        t = np.arange(len(Y_hat))
+        # If outputs are multi-dimensional, use the first dimension for y-axis,
+        # but keep colour from the full norm so the scatter colouring still
+        # conveys amplitude information.
+        y_pred = Y_hat[:, 0] if Y_hat.ndim == 2 else Y_hat
+        y_true = Yte[:, 0] if Yte.ndim == 2 else Yte
+
+        t = np.arange(len(y_pred))
         fig, ax = plt.subplots(figsize=(8, 3))
         sc = ax.scatter(
             t,
-            Y_hat.detach().cpu().numpy(),
-            c=Y_hat.detach().cpu().numpy(),
+            y_pred.detach().cpu().numpy(),
+            c=y_pred.detach().cpu().numpy(),
             cmap="jet",
             s=8,
             label="pred",
         )
-        ax.plot(t, Yte.cpu().numpy(), color="black", linewidth=1, label="target")
+        ax.plot(t, y_true.cpu().numpy(), color="black", linewidth=1, label="target")
         ax.set_title(f"Prediction – {ds_cfg['name']}")
         ax.legend()
         fig.colorbar(sc, ax=ax, label="pred amplitude")
