@@ -17,6 +17,7 @@ base_config:
     reservoir:
       mode: "single"
       input_dim: 3
+      device: "cuda"
       # input_scale, spectral_radius, and random_seed are varied below
   washout: 100
   val_ratio: 0.2
