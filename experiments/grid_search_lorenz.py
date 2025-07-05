@@ -130,14 +130,6 @@ def run_grid(sizes: List[int], lams: List[float], scales: List[float], srs: List
                 best_cfg = m["config"]
 
     results = {k: (val_dict[k], test_dict[k]) for k in combos}
-        val_list, test_list = [], []
-        print(f"N={n:3d} λ={lam:g} scale={scale} sr={sr} …", end="", flush=True)
-        for seed in seeds:
-            for _ in range(trials):
-                cfg = _cfg_for(n, lam, scale, sr, seed, val_ratio, washout, plot=False)
-                m = run_exp(cfg)
-                val_list.append(m["val_mse"])
-                test_list.append(m["mse"])
         mv = statistics.fmean(val_list)
         mt = statistics.fmean(test_list)
         print(f"  mean val={mv:.4f} test={mt:.4f}")
