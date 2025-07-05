@@ -130,14 +130,6 @@ def run_grid(sizes: List[int], lams: List[float], scales: List[float], srs: List
                 best_cfg = m["config"]
 
     results = {k: (val_dict[k], test_dict[k]) for k in combos}
-        mv = statistics.fmean(val_list)
-        mt = statistics.fmean(test_list)
-        print(f"  mean val={mv:.4f} test={mt:.4f}")
-        results[(n, lam, scale, sr)] = (val_list, test_list)
-        if mv < best_val:
-            best_val = mv
-            best_metrics = m  # last run corresponds to current cfg
-            best_cfg = cfg
     # Summary
     print("\n=== Summary ===")
     for (n, lam, scale, sr), (val_l, test_l) in results.items():
