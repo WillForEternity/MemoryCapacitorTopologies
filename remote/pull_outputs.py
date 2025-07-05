@@ -41,7 +41,7 @@ class Pod:
 
 
 def sync_pod(pod: Pod, remote_repo: str, dest_dir: Path):
-    remote_outputs = f"{pod.uri}:{remote_repo}/outputs/"
+    remote_outputs = f"{pod.uri}:{remote_repo}/training/outputs/"
     dest = dest_dir / pod.name
     dest.mkdir(parents=True, exist_ok=True)
 

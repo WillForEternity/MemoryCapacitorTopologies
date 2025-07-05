@@ -121,25 +121,89 @@ def run(cfg: Dict[str, Any]):
         y_pred = Y_hat[:, 0] if Y_hat.ndim == 2 else Y_hat
         y_true = Yte[:, 0] if Yte.ndim == 2 else Yte
 
-        t = np.arange(len(y_pred))
-        fig, ax = plt.subplots(figsize=(8, 3))
-        sc = ax.scatter(
-            t,
-            y_pred.detach().cpu().numpy(),
-            c=y_pred.detach().cpu().numpy(),
-            cmap="jet",
-            s=8,
-            label="pred",
-        )
-        ax.plot(t, y_true.cpu().numpy(), color="black", linewidth=1, label="target")
-        ax.set_title(f"Prediction – {ds_cfg['name']}")
-        ax.legend()
-        fig.colorbar(sc, ax=ax, label="pred amplitude")
-        out_dir = Path(cfg.get("output_dir", "outputs"))
+        import matplotlib
+        if ds_cfg['name'] == 'lorenz' and Y_hat.ndim == 2 and Y_hat.shape[1] == 3:
+            from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 – needed for 3D projection
+            fig = plt.figure(figsize=(6, 4))
+            ax = fig.add_subplot(111, projection='3d')
+            ax.plot(
+                Yte[:, 0].cpu(),
+                Yte[:, 1].cpu(),
+                Yte[:, 2].cpu(),
+                color='black',
+                linewidth=1,
+                label='target',
+                alpha=0.7,
+            )
+            ax.scatter(
+                Y_hat[:, 0].cpu(),
+                Y_hat[:, 1].cpu(),
+                Y_hat[:, 2].cpu(),
+                c=np.linalg.norm(Y_hat.cpu(), axis=1),
+                cmap='jet',
+                s=6,
+                label='pred',
+                depthshade=True,
+            )
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_zlabel('z')
+            ax.set_title('Lorenz trajectory – target (line) vs pred (dots)')
+            ax.legend()
+        else:
+            t = np.arange(len(y_pred))
+            fig, ax = plt.subplots(figsize=(8, 3))
+            sc = ax.scatter(
+                t,
+                y_pred.detach().cpu().numpy(),
+                c=y_pred.detach().cpu().numpy(),
+                cmap="jet",
+                s=8,
+                label="pred",
+            )
+            ax.plot(t, y_true.cpu().numpy(), color="black", linewidth=1, label="target")
+            ax.set_title(f"Prediction – {ds_cfg['name']}")
+            ax.legend()
+            fig.colorbar(sc, ax=ax, label="pred amplitude")
+        out_dir = Path(cfg.get("output_dir", "training/outputs"))
         out_dir.mkdir(parents=True, exist_ok=True)
         fig_path = out_dir / f"{ds_cfg['name']}_predictions_jet.png"
         fig.savefig(fig_path)
         plt.close(fig)
+
+        # Optional interactive plotly export for Lorenz 3-D trajectory
+        if ds_cfg['name'] == 'lorenz' and Y_hat.ndim == 2 and Y_hat.shape[1] == 3:
+            try:
+                import plotly.graph_objects as go
+
+                fig_int = go.Figure()
+                fig_int.add_trace(
+                    go.Scatter3d(
+                        x=Yte[:, 0].cpu(),
+                        y=Yte[:, 1].cpu(),
+                        z=Yte[:, 2].cpu(),
+                        mode='lines',
+                        line=dict(color='black', width=2),
+                        name='target',
+                        opacity=0.7,
+                    )
+                )
+                fig_int.add_trace(
+                    go.Scatter3d(
+                        x=Y_hat[:, 0].cpu(),
+                        y=Y_hat[:, 1].cpu(),
+                        z=Y_hat[:, 2].cpu(),
+                        mode='markers',
+                        marker=dict(size=2, color=np.linalg.norm(Y_hat.cpu(), axis=1), colorscale='Jet'),
+                        name='pred',
+                    )
+                )
+                fig_int.update_layout(title='Lorenz trajectory – interactive', scene=dict(xaxis_title='x', yaxis_title='y', zaxis_title='z'))
+                html_path = out_dir / 'lorenz_predictions_3d.html'
+                fig_int.write_html(html_path, include_plotlyjs='cdn')
+            except ModuleNotFoundError:
+                # Plotly not installed; skip interactive export
+                pass
 
     # ---------------- Verbose reporting (dataset plug-in) ---------------
     if cfg.get("verbose", True):
