@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import yaml
+import torch
 
 # Ensure project root on sys.path so we can import sibling packages
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,19 +99,29 @@ def run_grid(config_path: str):
     with concurrent.futures.ProcessPoolExecutor(max_workers=search_opts.get("workers", 4)) as executor:
         future_to_cfg = {executor.submit(_run_single, cfg): cfg for cfg in run_configs}
         for i, future in enumerate(concurrent.futures.as_completed(future_to_cfg)):
+            # Retrieve the original config to identify the run's parameters
+            original_cfg = future_to_cfg[future]
             try:
                 metrics = future.result()
                 val_mse = metrics["val_mse"]
-                cfg = metrics["config"]
-                # Create a human-readable identifier for the run's parameters
-                run_params_str = ', '.join([f"{k.split('.')[-1]}={v}" for k, v in combo.items()])
+
+                # Create a human-readable identifier for the run's parameters for logging
+                run_params = {}
+                for key in param_grid.keys():
+                    # Traverse the nested dict to get the value for the current param
+                    value = original_cfg
+                    for p in key.split('.'):
+                        value = value[p]
+                    run_params[key.split('.')[-1]] = value
+                run_params_str = ', '.join([f"{k}={v}" for k, v in run_params.items()])
+
                 print(f"({i+1}/{len(param_combos)}) -> val_mse={val_mse:.4f} | {run_params_str}")
 
                 if val_mse < best_val_mse:
                     best_val_mse = val_mse
                     best_metrics = metrics
             except Exception as exc:
-                print(f"A run generated an exception: {exc}")
+                print(f"[✘] A run generated an exception: {exc}")
 
     if best_metrics is None:
         print("\n[✘] No runs completed successfully!")
@@ -145,6 +156,14 @@ def run_grid(config_path: str):
 
 
 if __name__ == "__main__":
+    # Set start method for PyTorch multiprocessing. 'spawn' is safer for CUDA.
+    try:
+        torch.multiprocessing.set_start_method('spawn', force=True)
+        print("[grid_search] Set multiprocessing start method to 'spawn'.")
+    except RuntimeError:
+        # start method can only be set once
+        pass
+
     parser = argparse.ArgumentParser(description="Run a generic grid search from a YAML config.")
     parser.add_argument("config", help="Path to the search configuration YAML file.")
     args = parser.parse_args()
