@@ -62,8 +62,14 @@ def run(cfg: Dict[str, Any]):
     res = reservoir_builder.build(cfg["reservoir_bundle"])
 
     def _collect_states(seq: torch.Tensor, washout: int = 10):
+        """Drives the reservoir with an input sequence and collects states."""
+        # Ensure input is a tensor on the correct device.
+        # The reservoir's forward pass also moves it, but having it on the
+        # correct device here ensures the returned Y tensor is also on that device.
+        seq = torch.as_tensor(seq, dtype=torch.float32).to(res.device)
         states = res(seq.unsqueeze(0))  # (1, T, N)
-        return states[0, washout:-1, :], seq[washout + 1 :]  # X, Y
+        # X is reservoir states, Y is the next-step prediction target
+        return states[0, washout:-1, :], seq[washout + 1 :]
 
     Xtr, Ytr = _collect_states(train_seq, cfg.get("washout", 10))
     res.reset_state()
