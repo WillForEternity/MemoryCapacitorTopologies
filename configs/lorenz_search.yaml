@@ -1,0 +1,38 @@
+# Configuration for a Lorenz attractor prediction grid search.
+
+base_config:
+  dataset:
+    name: "lorenz"
+    params:
+      length: 6000
+      split: 0.5
+  reservoir_bundle:
+    topology:
+      name: "small_world"
+      params:
+        # n_nodes is varied in the grid search below
+        k: 6
+        beta: 0.2
+        seed: 42 # Seed for topology generation
+    reservoir:
+      mode: "single"
+      input_dim: 3
+      # input_scale, spectral_radius, and random_seed are varied below
+  washout: 100
+  val_ratio: 0.2
+  # ridge_lam is varied below
+
+# The grid of hyperparameters to search over.
+# The script will generate a run for every combination of these parameters.
+param_grid:
+  reservoir_bundle.topology.params.n_nodes: [200, 500, 1000]
+  reservoir_bundle.reservoir.input_scale: [0.5, 1.0, 1.5]
+  reservoir_bundle.reservoir.spectral_radius: [0.7, 0.9, 1.1, 1.25]
+  reservoir_bundle.reservoir.random_seed: [0, 1, 2]
+  ridge_lam: [1e-2, 1e-3, 1e-4, 1e-5]
+
+# Options controlling the grid search execution.
+search_options:
+  workers: 8  # Number of parallel processes to use
+  save_best: "best_lorenz.npz" # File to save the best model to
+  plot_best: true # Whether to generate a plot for the best model

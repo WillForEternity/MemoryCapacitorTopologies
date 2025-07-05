@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List
 import yaml
 
-INCLUDE_EXT = {".png", ".pdf", ".npz", ".json", ".csv", ".txt"}
+INCLUDE_EXT = {".html", ".png", ".pdf", ".npz", ".json", ".csv", ".txt"}
 
 
 class Pod:
