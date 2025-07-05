@@ -95,6 +95,8 @@ config = eval(npz["config"].item())  # or use json/pickle for safer loading
 
 * **Coordinate pairs** – For datasets that implement `datasets/<name>/reporting.py` with `verbose_pairs`, the pipeline prints `(ground-truth, predicted)` every *pair_stride* samples (default 2).
 * **Figure (optional)** – Pass `plot: true` in the config or `--plot` on the CLI to save a Jet-colormap scatter of predictions vs. time to `output_dir` (default `tests/outputs`).
+  *The file is named `<dataset>_predictions_jet.png`; for the Lorenz example this is `tests/outputs/lorenz_predictions_jet.png`.*
+  The x-axis is sample index, the y-axis is the first dimension of the predicted vector, and the colour encodes amplitude so multi-dimensional behaviour is still visible.
 
 Config keys of interest:
 ```yaml
@@ -103,6 +105,20 @@ pair_stride: 2       # sampling stride for coordinate pairs
 plot: false          # save prediction figure when true
 output_dir: tests/outputs
 ```
+
+---
+
+## Reproducibility & Scientific Best-Practices
+
+This repository follows these guidelines:
+
+1. **Deterministic seeds** – all calls that involve randomness accept a `random_seed` and default to a fixed value; experiment scripts expose this via CLI.
+2. **Explicit device placement** – tensors are placed on the correct device (`cuda`/`cpu`) at creation time to avoid implicit transfers.
+3. **Separation of concerns** – data generation, model definition, training, and evaluation are in distinct modules.
+4. **Version-controlled results** – grid-search scripts can save the full winning network (`npz`) and prediction figures which are small enough to commit.
+5. **Verbose logging** – tests and training print natural-language commentary so a human (or LLM) can audit results quickly.
+
+See `tests/` and the example commands above for end-to-end, reproducible runs.
 
 ---
 
