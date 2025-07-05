@@ -69,7 +69,7 @@ def _run_single(cfg: Dict) -> Dict:
         sr = cfg['reservoir_bundle']['reservoir']['spectral_radius']
         lam = cfg['ridge_lam']
         seed = cfg['reservoir_bundle']['reservoir']['random_seed']
-        run_id = f"n_nodes={n_nodes}, sr={sr:.2f}, lam={lam:g}, seed={seed}"
+        run_id = f"n_nodes={n_nodes}, sr={sr}, lam={lam}, seed={seed}"
         print(f"[Worker] STARTING: {run_id}", flush=True)
     except KeyError:
         # Fallback if the config structure is unexpected
@@ -130,7 +130,8 @@ def run_grid(config_path: str):
                     run_params[key.split('.')[-1]] = value
                 run_params_str = ', '.join([f"{k}={v}" for k, v in run_params.items()])
 
-                print(f"({i+1}/{len(param_combos)}) [✔] FINISHED -> val_mse={val_mse:.4f} | {run_params_str}", flush=True)
+                val_mse_str = f"{val_mse:.4f}" if val_mse is not None else "N/A"
+                print(f"({i+1}/{len(param_combos)}) [✔] FINISHED -> val_mse={val_mse_str} | {run_params_str}", flush=True)
 
                 if val_mse < best_val_mse:
                     best_val_mse = val_mse
