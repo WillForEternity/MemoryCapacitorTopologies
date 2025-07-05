@@ -52,6 +52,7 @@ def _parse_args():
     p.add_argument("--trials", type=int, default=1, help="repeats per seed")
     p.add_argument("--plot", action="store_true")
     p.add_argument("--save_best", type=str, default="", help="npz filename to store best network")
+    p.add_argument("--workers", type=int, default=4, help="Concurrent workers per node")
     return p.parse_args()
 
 
@@ -93,12 +94,42 @@ def _save_best(file: str | Path, metrics: dict):
     print(f"Best network saved to {file}")
 
 
-def run_grid(sizes: List[int], lams: List[float], scales: List[float], srs: List[float], seeds: List[int], val_ratio: float, washout: int, trials: int, do_plot: bool, save_best: str):
+def _run_single(args_tuple):
+    n, lam, scale, sr, seed, val_ratio, washout = args_tuple
+    cfg = _cfg_for(n, lam, scale, sr, seed, val_ratio, washout, plot=False)
+    m = run_exp(cfg)
+    return (n, lam, scale, sr, m["val_mse"], m["mse"], m)
+
+def run_grid(sizes: List[int], lams: List[float], scales: List[float], srs: List[float], seeds: List[int], val_ratio: float, washout: int, trials: int, do_plot: bool, save_best: str, workers: int = 4):
     results = {}
     best_val = float("inf")
     best_metrics = None
 
-    for n, lam, scale, sr in itertools.product(sizes, lams, scales, srs):
+    import concurrent.futures
+
+    combos = list(itertools.product(sizes, lams, scales, srs))
+    pool_args = []
+    for n, lam, scale, sr in combos:
+        for seed in seeds:
+            for _ in range(trials):
+                pool_args.append((n, lam, scale, sr, seed, val_ratio, washout))
+
+    val_dict = {c: [] for c in combos}
+    test_dict = {c: [] for c in combos}
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as exe:
+        for res in exe.map(_run_single, pool_args):
+            n, lam, scale, sr, val_mse, test_mse, m = res
+            key = (n, lam, scale, sr)
+            val_dict[key].append(val_mse)
+            test_dict[key].append(test_mse)
+            print(f"Partial {key} seed done -> val={val_mse:.4f} test={test_mse:.4f}")
+            if val_mse < best_val:
+                best_val = val_mse
+                best_metrics = m
+                best_cfg = m["config"]
+
+    results = {k: (val_dict[k], test_dict[k]) for k in combos}
         val_list, test_list = [], []
         print(f"N={n:3d} λ={lam:g} scale={scale} sr={sr} …", end="", flush=True)
         for seed in seeds:

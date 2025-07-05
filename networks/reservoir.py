@@ -44,6 +44,7 @@ class MemcapacitiveReservoir(nn.Module):
         input_scale: float = 1.0,
         random_seed: int = 0,
         device: torch.device | str | None = None,
+        vectorized: bool = True,
     ):
         """Parameters
         ----------
@@ -61,6 +62,7 @@ class MemcapacitiveReservoir(nn.Module):
         """
         super().__init__()
         self.device = torch.device(device) if device is not None else torch.device("cpu")
+        self.vectorized = vectorized
 
         self.W = nn.Parameter(torch.from_numpy(adjacency).to(torch.float32), requires_grad=False)
         self.n_nodes = self.W.shape[0]
@@ -71,12 +73,19 @@ class MemcapacitiveReservoir(nn.Module):
             requires_grad=False,
         )
 
-        # Build neurons
+        # Build neurons / vectorised buffers
         if memc_factory is None:
             memc_factory = Memcapacitor
         if memc_params is None:
             memc_params = {"c0": 1.0, "k": 0.5, "dt": 1e-3}
-        self.neurons = nn.ModuleList([memc_factory(**memc_params) for _ in range(self.n_nodes)])
+        if self.vectorized:
+            # assume shared parameters for all neurons
+            self.c0 = memc_params.get("c0", 1.0)
+            self.k = memc_params.get("k", 0.5)
+            self.dt = memc_params.get("dt", 1e-3)
+            self.register_buffer("flux", torch.zeros(self.n_nodes, device=self.device))  # (N,)
+        else:
+            self.neurons = nn.ModuleList([memc_factory(**memc_params) for _ in range(self.n_nodes)])
         self._charges: Optional[torch.Tensor] = None  # (batch, n_nodes)
 
     # ---------------------------------------------------------------------
@@ -85,9 +94,12 @@ class MemcapacitiveReservoir(nn.Module):
     def reset_state(self, batch_size: int = 1):
         """Reset internal charges to zero and neuron fluxes."""
         self._charges = torch.zeros(batch_size, self.n_nodes, device=self.device)
-        for n in self.neurons:
-            if hasattr(n, "reset"):
-                n.reset()
+        if self.vectorized:
+            self.flux.zero_()
+        else:
+            for n in self.neurons:
+                if hasattr(n, "reset"):
+                    n.reset()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # shape (B, T, input_dim)
         B, T, _ = x.shape
@@ -101,12 +113,15 @@ class MemcapacitiveReservoir(nn.Module):
             v_raw = torch.matmul(self._charges, self.W) + torch.matmul(x[:, t, :], self.Win.T)
             # Limit voltage magnitude to avoid numeric overflow in simple device model
             v_in = torch.tanh(v_raw)
-            new_charges = []
-            # process each neuron independently (could be vectorised later)
-            for i, neuron in enumerate(self.neurons):
-                qi = neuron(v_in[0, i])  # scalar
-                new_charges.append(qi)
-            self._charges = torch.stack(new_charges).unsqueeze(0)  # (1, n_nodes)
+            if self.vectorized:
+                # Vectorised memcapacitor update
+                v_vec = v_in[0]  # (N,)
+                self.flux = self.flux + v_vec * self.dt  # update flux
+                charges_vec = (self.c0 + self.k * self.flux) * v_vec  # (N,)
+                self._charges = charges_vec.unsqueeze(0)  # (1, N)
+            else:
+                new_charges = [neuron(v_in[0, i]) for i, neuron in enumerate(self.neurons)]
+                self._charges = torch.stack(new_charges).unsqueeze(0)  # (1, n_nodes)
             states.append(self._charges)
         # concatenate along time then add batch dim
         states_cat = torch.cat(states, dim=0).unsqueeze(0)  # (1, T, N)

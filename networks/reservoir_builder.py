@@ -53,12 +53,18 @@ def build(cfg: Dict[str, Any]):
     mode = res_cfg.get("mode", "single")
 
     if mode == "single":
+        # Determine device: prefer CUDA if available unless explicitly set
+        device_cfg = res_cfg.get("device")
+        if device_cfg is None:
+            device_cfg = "cuda" if torch.cuda.is_available() else "cpu"
+
         return MemcapacitiveReservoir(
             adjacency=adj,
             input_dim=res_cfg["input_dim"],
             memc_params=res_cfg.get("memc_params"),
             input_scale=res_cfg.get("input_scale", 1.0),
             random_seed=res_cfg.get("random_seed", 0),
+            device=device_cfg,
         )
     elif mode in {"multi", "cluster"}:
         raise NotImplementedError(f"Reservoir mode '{mode}' not implemented yet.")
