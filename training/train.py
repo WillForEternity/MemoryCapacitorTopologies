@@ -85,8 +85,8 @@ def run(cfg: Dict[str, Any]):
     Xte_n = (Xte - X_mean) / X_std
     Ytr_z = (Ytr - Y_mean) / Y_std
 
-    ones_tr = torch.ones(Xtr_n.shape[0], 1)
-    ones_te = torch.ones(Xte_n.shape[0], 1)
+    ones_tr = torch.ones(Xtr_n.shape[0], 1, device=Xtr_n.device)
+    ones_te = torch.ones(Xte_n.shape[0], 1, device=Xte_n.device)
     Xtr_aug = torch.cat([Xtr_n, ones_tr], dim=1)
     Xte_aug = torch.cat([Xte_n, ones_te], dim=1)
 
@@ -94,7 +94,9 @@ def run(cfg: Dict[str, Any]):
     W_out = _ridge_regression(Xtr_aug, Ytr_z, lam=lam, bias_index=Xtr_aug.shape[1]-1)
     # Validation prediction
     if Xval is not None:
-        Xval_aug = torch.cat([ (Xval - X_mean)/X_std , torch.ones(Xval.shape[0],1)], dim=1)
+        Xval_n = (Xval - X_mean) / X_std
+        ones_val = torch.ones(Xval_n.shape[0], 1, device=Xval_n.device)
+        Xval_aug = torch.cat([Xval_n, ones_val], dim=1)
         Yval_hat = (Xval_aug @ W_out).squeeze() * Y_std + Y_mean
     # Test prediction
     Y_hat_z = (Xte_aug @ W_out).squeeze()
