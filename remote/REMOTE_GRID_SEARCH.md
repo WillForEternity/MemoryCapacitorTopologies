@@ -64,55 +64,79 @@ SSH into the pod (or let `setup.py` do it for you) and run:
 conda activate rc
 cd ~/MemoryCapacitorTopologies
 python experiments/grid_search.py \
-       --config configs/lorenz_search.yaml \
-       --workers 8
-```
 
-Flags explained:
-
-- `--config` – YAML describing search space and default values.
-- `--workers` – number of parallel Python processes.  For a single GPU choose the number of **physical** CPU cores to keep utilisation high without context-switch overhead.
-
-**Tip:** add `--name my_run` to override the timestamped output directory.
-
-Real-time logs stream to the terminal; tracebacks from worker processes are forwarded to the main process for easy debugging.
-
----
-
-## 4  Retrieve Results (`remote/pull_outputs.py`)
-
-Back on **local** machine:
+Once logged in, update the package manager and install `git` and `wget`:
 
 ```bash
-python remote/pull_outputs.py --pod runpod_gpu1
+apt-get update && apt-get install -y git wget
 ```
 
-This performs an `rsync` over SSH:
+### Step 3: Install Miniconda
 
-* `~/MemoryCapacitorTopologies/training/outputs/` ➜ `training/outputs/` (local)
+1.  Download the Miniconda installer. We'll install it to `/root/miniconda` to match the target command.
+    ```bash
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /root/miniconda.sh
+    ```
+2.  Run the installer. The `-b` flag runs in batch mode (no prompts) and `-p` specifies the installation path.
+    ```bash
+    bash /root/miniconda.sh -b -p /root/miniconda
+    ```
+3.  Initialize your shell to use Conda. This is crucial.
+    ```bash
+    /root/miniconda/bin/conda init bash
+    ```
+4.  **IMPORTANT:** You must now **exit and log back in** for the `conda` command to be available in your path.
 
-The best network (`*.npz`) and any figures (`*.png`, `*.html`) will appear inside a sub-folder such as `training/outputs/lorenz_search_results/`.
+### Step 4: Clone the Project Repository
 
----
-
-## 5  Run Final Validation Locally
+Clone the project code into the `/root` directory:
 
 ```bash
-python -m training.train --config configs/best_lorenz_config.yaml --plot
+cd /root
+git clone https://github.com/WillForEternity/MemoryCapacitorTopologies.git
 ```
 
-The command loads the saved `.npz`, re-trains (if desired), and writes fresh figures to the same output directory.
+### Step 5: Create the Conda Environment
 
----
+1.  Navigate into the cloned repository:
+    ```bash
+    cd /root/MemoryCapacitorTopologies
+    ```
+2.  Create the project's Conda environment (`rc`) using the provided `environment.yml` file. This installs all required Python packages (PyTorch, NumPy, etc.).
+    ```bash
+    /root/miniconda/bin/conda env create -f environment.yml
+    ```
+    This step may take several minutes.
 
-## 6  Common Issues & Fixes
+### Step 6: Run the Grid Search
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `ModuleNotFoundError: yaml` on local pull | `pyyaml` not in your *local* env | `pip install pyyaml` or use the project’s conda env |
-| `conda: command not found` or `conda.sh: No such file or directory` on remote | The remote shell is non-interactive and didn't load Conda's path. | Use the `bash -l -c "..."` wrapper from the Quick Start guide. If that fails, find your `conda.sh` with `find ~/ -name "conda.sh"` and source it manually. |
-| CUDA OOM on pod | Too many workers or large `n_nodes` | Reduce `--workers` or search space size |
-| Numerical instability (singular matrix) | ill-conditioned data | The code uses `torch.linalg.lstsq`; ensure `ridge_lam` includes non-zero values |
+You are now ready. The remote environment is fully configured.
+
+From your **local machine**, you can now execute the target command. This single line connects to the pod and launches the workload.
+
+-   **-t**: Allocates a pseudo-terminal, which helps ensure the script runs correctly.
+-   **-i**: Specifies your private key.
+-   **-p**: Specifies the port.
+-   **"..."**: The command to run on the remote machine.
+    -   `cd /root/MemoryCapacitorTopologies`: Navigates to the project directory.
+    -   `/root/miniconda/envs/rc/bin/python`: Uses the **exact** Python executable from our `rc` environment. This is the most reliable way to ensure the correct dependencies are used, bypassing any shell path issues.
+    -   `-u`: Unbuffered output, so you see results in real-time.
+    -   `experiments/grid_search.py configs/lorenz_search.yaml`: The script to run and its configuration file.
+
+```bash
+# Replace with your pod's details
+SSH_USER="root"
+SSH_HOST="157.157.221.29"
+SSH_PORT="23202"
+SSH_KEY="~/.ssh/id_ed25519"
+
+# The final, working command
+ssh -t -p $SSH_PORT $SSH_USER@$SSH_HOST -i $SSH_KEY \
+    "cd /root/MemoryCapacitorTopologies && \
+     /root/miniconda/envs/rc/bin/python -u experiments/grid_search.py configs/lorenz_search.yaml"
+```
+
+This command will now work perfectly, and you will see the grid search progress streaming in your local terminal.
 
 ---
 
