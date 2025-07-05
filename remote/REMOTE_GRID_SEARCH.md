@@ -110,6 +110,7 @@ The command loads the saved `.npz`, re-trains (if desired), and writes fresh fig
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `ModuleNotFoundError: yaml` on local pull | `pyyaml` not in your *local* env | `pip install pyyaml` or use the project’s conda env |
+| `conda: command not found` or `conda.sh: No such file or directory` on remote | The remote shell is non-interactive and didn't load Conda's path. | Use the `bash -l -c "..."` wrapper from the Quick Start guide. If that fails, find your `conda.sh` with `find ~/ -name "conda.sh"` and source it manually. |
 | CUDA OOM on pod | Too many workers or large `n_nodes` | Reduce `--workers` or search space size |
 | Numerical instability (singular matrix) | ill-conditioned data | The code uses `torch.linalg.lstsq`; ensure `ridge_lam` includes non-zero values |
 
@@ -117,17 +118,25 @@ The command loads the saved `.npz`, re-trains (if desired), and writes fresh fig
 
 ## Quick Start
 
-```bash
-# local machine
-python remote/setup.py --pod runpod_gpu1  # one-time
-ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
-  source ~/miniforge3/etc/profile.d/conda.sh && \
-  conda activate rc && \
-  cd ~/MemoryCapacitorTopologies && \
-  python experiments/grid_search.py --config configs/lorenz_search.yaml --workers 8"
+This is the most robust way to launch a remote grid search in a single command.
 
-# after it finishes
+```bash
+# From your LOCAL machine:
+
+# 1. (One-time) Set up the pod:
+python remote/setup.py --pod runpod_gpu1
+
+# 2. Launch the grid search using a login shell wrapper:
+ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 'bash -l -c "\
+  cd ~/MemoryCapacitorTopologies && \
+  git pull --quiet && \
+  conda activate rc && \
+  python experiments/grid_search.py --config configs/lorenz_random_search.yaml --workers 32"'
+
+# 3. (After it finishes) Pull the results:
 python remote/pull_outputs.py --pod runpod_gpu1
 ```
+
+**Why `bash -l -c`?** The `-l` flag makes Bash act as a **login shell**, which forces it to load startup files like `~/.profile` or `~/.bash_profile`. This is where `conda init` places its configuration, making this command work automatically without needing to know the exact path to `conda.sh`.
 
 Enjoy your accelerated hyper-parameter sweeps!  🎉
