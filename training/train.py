@@ -34,11 +34,6 @@ def _ridge_regression(
         y = y.unsqueeze(1)
     XtX = X.T @ X  # (N,N)
     rhs = X.T @ y  # (N,1)
-    # --- DEBUG: inspect types before the failing line ---
-    print(f"[DEBUG] ridge_regression: lam={lam}, type={type(lam)}")
-    print(f"[DEBUG] ridge_regression: XtX.shape={XtX.shape}, type={type(XtX)}")
-    print(f"[DEBUG] ridge_regression: XtX.shape[0]={XtX.shape[0]}, type={type(XtX.shape[0])}")
-    # --- END DEBUG ---
     reg = lam * torch.eye(int(XtX.shape[0]), device=X.device)
     if bias_index is not None:
         reg[bias_index, bias_index] = 0.0
@@ -101,7 +96,7 @@ def run(cfg: Dict[str, Any]):
     Xtr_aug = torch.cat([Xtr_n, ones_tr], dim=1)
     Xte_aug = torch.cat([Xte_n, ones_te], dim=1)
 
-    lam = cfg.get("ridge_lam", 1e-2)
+    lam = float(cfg.get("ridge_lam", 1e-2))
     W_out = _ridge_regression(Xtr_aug, Ytr_z, lam=lam, bias_index=Xtr_aug.shape[1]-1)
     # Validation prediction
     if Xval is not None:
