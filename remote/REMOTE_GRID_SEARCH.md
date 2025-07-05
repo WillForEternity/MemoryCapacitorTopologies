@@ -148,3 +148,67 @@ python remote/pull_outputs.py --pod runpod_gpu1
 ```
 
 Enjoy your accelerated hyper-parameter sweeps!  🎉
+
+---
+
+## Appendix A — Exact Command Log (Working Session)
+
+Below is the **verbatim** sequence of commands that produced the 432-job Lorenz sweep on `runpod_gpu1`.  Lines starting with `#` are comments you can omit when copy-pasting.
+
+```bash
+##########  LOCAL  ##########
+# 1.  Generate / verify SSH key
+ssh-keygen -t ed25519 -C "my_runpod_key" -f ~/.ssh/id_ed25519    # skip if key exists
+cat ~/.ssh/id_ed25519.pub                     # copy this for RunPod dashboard
+
+# 2.  Create pods.yml entry (edit accordingly)
+cat > remote/pods.yml <<'EOF'
+runpod_gpu1:
+  host: 157.157.221.29
+  port: 23202
+  user: root
+  key: ~/.ssh/id_ed25519
+EOF
+
+# 3.  One-time automated bootstrap (installs conda, clones repo, etc.)
+python remote/setup.py --pod runpod_gpu1
+
+##########  REMOTE (SSH) ##########
+# 4.  Verify GPU & env
+ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "nvidia-smi"
+ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "source ~/miniforge3/etc/profile.d/conda.sh && conda activate rc && python -c 'import torch, yaml, numpy; print(torch.cuda.is_available())'"
+
+# 5.  (Optional) update repo to latest commit & dependencies
+ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
+  cd ~/MemoryCapacitorTopologies && git pull && \
+  source ~/miniforge3/etc/profile.d/conda.sh && conda activate rc && \
+  pip install -r requirements.txt --quiet"
+
+# 6.  Run the grid search (unbuffered, real-time logs)
+ssh -t -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
+  cd ~/MemoryCapacitorTopologies && \
+  /root/miniforge3/envs/rc/bin/python -u experiments/grid_search.py \
+      --config configs/lorenz_search.yaml \
+      --workers 8"
+
+##########  LOCAL  ##########
+# 7.  Pull outputs after the run completes (idempotent)
+python remote/pull_outputs.py --pod runpod_gpu1
+
+# 8.  Inspect / plot locally
+python -m training.train --config configs/best_lorenz_config.yaml --plot
+
+# 9.  (Optional) commit best artefacts to git, then push
+#     Only do this **after** verifying plots & metrics locally.
+```
+
+**Important flags & rationale**
+
+| Flag / command | Why |
+|----------------|-----|
+| `-u` on python  | Forces unbuffered stdout so you see progress live in SSH session. |
+| `--workers 8`  | Matches the *physical* CPU cores on an 8-vCPU RunPod GPU instance. Adjust if your pod has fewer / more cores. |
+| `torch.set_num_threads(1)` (in code) | Ensures each worker uses a single CPU thread, avoiding oversubscription. |
+
+That’s it—if you can run the nine blocks above without error, you will replicate the exact grid-search run that yielded `val_mse ≈ 1.47 × 10³` in minutes.
+
