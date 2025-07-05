@@ -25,6 +25,8 @@ from typing import Any, Dict, List
 import numpy as np
 import yaml
 import torch
+import traceback
+import io
 
 # Ensure project root on sys.path so we can import sibling packages
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,8 +80,15 @@ def _run_single(cfg: Dict) -> Dict:
     # Suppress verbose output from individual runs during grid search
     cfg["verbose"] = False
     cfg["plot"] = False
-    metrics = run_exp(cfg)
-    return metrics
+    try:
+        metrics = run_exp(cfg)
+        return metrics
+    except Exception as e:
+        # Capture traceback and add it to the exception to be sent back to the main process
+        s = io.StringIO()
+        traceback.print_exc(file=s)
+        e.args = (f"{e.args[0]}\n\n--- Traceback from worker ---\n{s.getvalue()}",)
+        raise
 
 
 def run_grid(config_path: str):
