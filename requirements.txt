@@ -2,3 +2,6 @@ torch
 numpy
 matplotlib
 networkx
+pyyaml
+tqdm
+plotly
