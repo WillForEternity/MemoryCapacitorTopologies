@@ -89,7 +89,8 @@ config = eval(npz["config"].item())  # or use json/pickle for safer loading
 
 ---
 
-## Automated GPU Grid Search & Remote Execution
+## Automated GPU Grid Search & Remote Execution  
+*(See [`remote/REMOTE_GRID_SEARCH.md`](remote/REMOTE_GRID_SEARCH.md) for a full step-by-step remote guide.)*
 
 The entire hyper-parameter search is driven by a single, generic script:
 
