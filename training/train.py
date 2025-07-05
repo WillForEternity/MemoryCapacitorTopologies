@@ -117,8 +117,15 @@ def run(cfg: Dict[str, Any]):
 
         t = np.arange(len(Y_hat))
         fig, ax = plt.subplots(figsize=(8, 3))
-        sc = ax.scatter(t, Y_hat.detach().numpy(), c=Y_hat.detach().numpy(), cmap="jet", s=8, label="pred")
-        ax.plot(t, Yte.numpy(), color="black", linewidth=1, label="target")
+        sc = ax.scatter(
+            t,
+            Y_hat.detach().cpu().numpy(),
+            c=Y_hat.detach().cpu().numpy(),
+            cmap="jet",
+            s=8,
+            label="pred",
+        )
+        ax.plot(t, Yte.cpu().numpy(), color="black", linewidth=1, label="target")
         ax.set_title(f"Prediction – {ds_cfg['name']}")
         ax.legend()
         fig.colorbar(sc, ax=ax, label="pred amplitude")
