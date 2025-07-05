@@ -64,7 +64,10 @@ class MemcapacitiveReservoir(nn.Module):
         self.device = torch.device(device) if device is not None else torch.device("cpu")
         self.vectorized = vectorized
 
-        self.W = nn.Parameter(torch.from_numpy(adjacency).to(torch.float32, device=self.device), requires_grad=False)
+        self.W = nn.Parameter(
+            torch.tensor(adjacency, dtype=torch.float32, device=self.device),
+            requires_grad=False,
+        )
         self.n_nodes = self.W.shape[0]
 
         rng = torch.Generator(device=self.device).manual_seed(random_seed)
