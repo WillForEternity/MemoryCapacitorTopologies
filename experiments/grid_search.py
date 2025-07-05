@@ -62,8 +62,11 @@ def _save_best(file: str | Path, metrics: dict):
     print(f"\n[✔] Best network saved to {file}")
 
 
-def _run_single(cfg: Dict) -> Dict:
-    """Wrapper to run a single experiment configuration."""
+def _run_single(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """A single grid-search evaluation. Must be a top-level function."""
+    # CRITICAL: Prevent CPU thrashing when running many parallel jobs.
+    # Each worker process should use a single thread.
+    torch.set_num_threads(1)
     # Create a concise identifier for logging
     try:
         # Attempt to build a descriptive run ID from key parameters
