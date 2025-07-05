@@ -34,6 +34,11 @@ def _ridge_regression(
         y = y.unsqueeze(1)
     XtX = X.T @ X  # (N,N)
     rhs = X.T @ y  # (N,1)
+    # --- DEBUG: inspect types before the failing line ---
+    print(f"[DEBUG] ridge_regression: lam={lam}, type={type(lam)}")
+    print(f"[DEBUG] ridge_regression: XtX.shape={XtX.shape}, type={type(XtX)}")
+    print(f"[DEBUG] ridge_regression: XtX.shape[0]={XtX.shape[0]}, type={type(XtX.shape[0])}")
+    # --- END DEBUG ---
     reg = lam * torch.eye(int(XtX.shape[0]), device=X.device)
     if bias_index is not None:
         reg[bias_index, bias_index] = 0.0
