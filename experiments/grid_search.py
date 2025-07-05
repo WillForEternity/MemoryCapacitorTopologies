@@ -62,11 +62,23 @@ def _save_best(file: str | Path, metrics: dict):
 
 def _run_single(cfg: Dict) -> Dict:
     """Wrapper to run a single experiment configuration."""
+    # Create a concise identifier for logging
+    try:
+        # Attempt to build a descriptive run ID from key parameters
+        n_nodes = cfg['reservoir_bundle']['topology']['params']['n_nodes']
+        sr = cfg['reservoir_bundle']['reservoir']['spectral_radius']
+        lam = cfg['ridge_lam']
+        seed = cfg['reservoir_bundle']['reservoir']['random_seed']
+        run_id = f"n_nodes={n_nodes}, sr={sr:.2f}, lam={lam:g}, seed={seed}"
+        print(f"[Worker] STARTING: {run_id}", flush=True)
+    except KeyError:
+        # Fallback if the config structure is unexpected
+        print("[Worker] STARTING a new run...", flush=True)
+
     # Suppress verbose output from individual runs during grid search
     cfg["verbose"] = False
     cfg["plot"] = False
     metrics = run_exp(cfg)
-    # Return the full metrics dict, which includes the config
     return metrics
 
 
@@ -83,7 +95,7 @@ def run_grid(config_path: str):
     keys, values = zip(*param_grid.items())
     param_combos = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
-    print(f"Launching grid search with {len(param_combos)} combinations...")
+    print(f"Launching grid search with {len(param_combos)} combinations...", flush=True)
 
     # Create a list of full configuration dictionaries for the pool
     run_configs = []
@@ -97,7 +109,10 @@ def run_grid(config_path: str):
     best_metrics = None
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=search_opts.get("workers", 4)) as executor:
+        print(f"Submitting {len(run_configs)} jobs to the process pool ({search_opts.get('workers', 4)} workers)...", flush=True)
         future_to_cfg = {executor.submit(_run_single, cfg): cfg for cfg in run_configs}
+        print("All jobs submitted. Waiting for results...", flush=True)
+
         for i, future in enumerate(concurrent.futures.as_completed(future_to_cfg)):
             # Retrieve the original config to identify the run's parameters
             original_cfg = future_to_cfg[future]
@@ -115,32 +130,32 @@ def run_grid(config_path: str):
                     run_params[key.split('.')[-1]] = value
                 run_params_str = ', '.join([f"{k}={v}" for k, v in run_params.items()])
 
-                print(f"({i+1}/{len(param_combos)}) -> val_mse={val_mse:.4f} | {run_params_str}")
+                print(f"({i+1}/{len(param_combos)}) [✔] FINISHED -> val_mse={val_mse:.4f} | {run_params_str}", flush=True)
 
                 if val_mse < best_val_mse:
                     best_val_mse = val_mse
                     best_metrics = metrics
             except Exception as exc:
-                print(f"[✘] A run generated an exception: {exc}")
+                print(f"({i+1}/{len(param_combos)}) [✘] FAILED -> {exc}", flush=True)
 
     if best_metrics is None:
-        print("\n[✘] No runs completed successfully!")
+        print("\n[✘] No runs completed successfully!", flush=True)
         return
 
-    print(f"\n--- Grid Search Complete ---")
-    print(f"Best validation MSE: {best_val_mse:.5f}")
-    print(f"Best parameters found:")
+    print(f"\n--- Grid Search Complete ---", flush=True)
+    print(f"Best validation MSE: {best_val_mse:.5f}", flush=True)
+    print(f"Best parameters found:", flush=True)
     best_combo = {k: best_metrics['config'] for k in param_grid.keys()}
     for key, value in best_metrics['config'].items():
         if isinstance(value, dict):
             for sub_key, sub_value in value.items():
                  if isinstance(sub_value, dict):
                     for ssub_key, ssub_value in sub_value.items():
-                        print(f'    {key}.{sub_key}.{ssub_key}: {ssub_value}')
+                        print(f'    {key}.{sub_key}.{ssub_key}: {ssub_value}', flush=True)
                  else:
-                    print(f'    {key}.{sub_key}: {sub_value}')
+                    print(f'    {key}.{sub_key}: {sub_value}', flush=True)
         else:
-            print(f'    {key}: {value}')
+            print(f'    {key}: {value}', flush=True)
 
     # Save the best model if a path is provided
     if (save_path := search_opts.get("save_best")):
@@ -148,11 +163,11 @@ def run_grid(config_path: str):
 
     # Generate a plot for the best model if requested
     if search_opts.get("plot_best", False):
-        print("\nGenerating plot for best configuration...")
+        print("\nGenerating plot for best configuration...", flush=True)
         plot_cfg = best_metrics["config"].copy()
         plot_cfg["plot"] = True
         run_exp(plot_cfg)
-        print("[✔] Plot saved.")
+        print("[✔] Plot saved.", flush=True)
 
 
 if __name__ == "__main__":
