@@ -135,7 +135,7 @@ def run(cfg: Dict[str, Any]):
         ax.set_title(f"Prediction – {ds_cfg['name']}")
         ax.legend()
         fig.colorbar(sc, ax=ax, label="pred amplitude")
-        out_dir = Path(cfg.get("output_dir", "tests/outputs"))
+        out_dir = Path(cfg.get("output_dir", "outputs"))
         out_dir.mkdir(parents=True, exist_ok=True)
         fig_path = out_dir / f"{ds_cfg['name']}_predictions_jet.png"
         fig.savefig(fig_path)
