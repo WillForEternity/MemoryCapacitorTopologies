@@ -1,0 +1,25 @@
+dataset:
+  name: lorenz
+  params:
+    length: 6000
+    split: 0.5
+reservoir_bundle:
+  topology:
+    name: small_world
+    params:
+      k: 6
+      beta: 0.2
+      seed: 42
+      n_nodes: 1000
+  reservoir:
+    mode: single
+    input_dim: 3
+    device: cuda
+    input_scale: 1.5
+    spectral_radius: 1.25
+    random_seed: 2
+washout: 100
+val_ratio: 0.2
+ridge_lam: 0.01
+verbose: True
+plot: True
