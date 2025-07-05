@@ -34,7 +34,7 @@ def _ridge_regression(
         y = y.unsqueeze(1)
     XtX = X.T @ X  # (N,N)
     rhs = X.T @ y  # (N,1)
-    reg = lam * torch.eye(XtX.shape[0], device=X.device)
+    reg = lam * torch.eye(int(XtX.shape[0]), device=X.device)
     if bias_index is not None:
         reg[bias_index, bias_index] = 0.0
     W = torch.linalg.solve(XtX + reg, rhs)
