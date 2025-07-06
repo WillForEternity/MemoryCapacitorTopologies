@@ -185,6 +185,8 @@ def main():
         config_name = Path(user_input['config_path']).stem
         save_path = f"training/outputs/{config_name}_{n_nodes}_nodes_best.npz"
 
+        # --- Launch Grid Search ---
+        step_name = f"Grid Search ({n_nodes} nodes)"
         ssh_command = [
             "ssh", "-t",
             "-i", os.path.expanduser(user_input['key_path']),
@@ -197,13 +199,30 @@ def main():
                 f"{user_input['config_path']} --n-nodes {n_nodes} --save-path {save_path}"
             )
         ]
-        
-        if not run_command(ssh_command, f"Grid Search ({n_nodes} nodes)"):
+        if not run_command(ssh_command, step_name):
             print_color(f"[✖] Grid search for {n_nodes} nodes failed. Check logs.", "red")
             # Decide if you want to continue with the next loop or stop
             # continue 
             return # Stop on first failure
 
+        # --- Generate Plots ---
+        step_name = f"Generating Plots ({n_nodes} nodes)"
+        plot_command = [
+            "ssh",
+            "-i", os.path.expanduser(user_input['key_path']),
+            "-p", ssh_details['port'],
+            ssh_details['uri'],
+            (
+                f"cd /root/MemoryCapacitorTopologies && "
+                f"/root/miniconda/envs/rc/bin/python -u remote/plot_remote.py "
+                f"{save_path} training/outputs"
+            )
+        ]
+        if not run_command(plot_command, step_name):
+            print_color(f"[✖] Plot generation for {n_nodes} nodes failed. Check logs.", "red")
+            # Decide if you want to continue with the next loop or stop
+            # continue 
+            return # Stop on first failure
 
     # --- Step 5: Retrieve Results ---
     if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results"):
