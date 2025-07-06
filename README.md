@@ -1,175 +1,104 @@
 # Memcapacitive Reservoir Topologies
 
-This project is a framework for creating and testing memcapacitor-based neuromorphic computing models.
+This repository provides a comprehensive framework for designing, testing, and deploying neuromorphic computing models based on memcapacitive devices. It features a modular architecture, a powerful automated remote training system, and a strong emphasis on reproducibility and extensibility.
+
+
+*^Example of a Lorenz attractor predicted by a model trained with this framework.*^
+
+---
+
+## Key Features
+
+- **Modular & Extensible:** Easily add new network topologies, datasets, and device models. The framework automatically discovers and registers new components.
+- **Powerful Automation:** A single script (`remote/run_remote_experiment.py`) orchestrates the entire remote workflow: provisioning a GPU server, running a parallelized grid search, and downloading the results.
+- **Beautiful & Informative CLI:** Get real-time, beautifully formatted output for all steps, including a clean, static progress bar for remote training.
+- **Reproducibility Focused:** Experiments are driven by version-controlled YAML configuration files, and all sources of randomness are controlled by explicit seeds.
+- **Rich Diagnostics:** Generate interactive 3D plots and detailed performance metrics for easy analysis.
+- **AI-Friendly Design:** The codebase is written to be highly readable for both humans and AI agents, with verbose logging and a clear, single-responsibility structure.
+
+---
+
+## Getting Started (Local)
+
+Follow these steps to set up the project on your local machine.
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/WillForEternity/MemoryCapacitorTopologies.git
+cd MemoryCapacitorTopologies
+```
+
+### 2. Set Up the Environment
+
+We recommend using a Python virtual environment.
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Run a Local Training Example
+
+Run a pre-configured experiment to train a model on the Lorenz attractor and generate a plot of the results.
+
+```bash
+python -m training.train --config configs/best_lorenz_config.yaml --plot
+```
+
+This will save an interactive 3D plot to `training/outputs/lorenz_predictions_3d.html`.
+
+---
+
+## Automated Remote Grid Search
+
+For computationally intensive hyperparameter searches, this repository provides a fully automated system for running experiments on a remote GPU server (e.g., from RunPod, Vast.ai, etc.).
+
+**The entire workflow is handled by a single script.** For a complete guide on the simple, 3-step process (commit, kill, run), please see:
+
+➡️ **[Full Guide: Automated Remote Experiment Workflow](remote/run_remote_experiment.md)**
+
+---
 
 ## Project Structure
 
-- `models/`              – core device models (e.g., `Memcapacitor`).
-- `networks/`            – reservoir logic and topologies.
-  - `networks/topologies/`   – each topology in its own file (`small_world.py`, …).
-  - `networks/reservoir.py`  – `MemcapacitiveReservoir` implementation.
-- `datasets/`            – loaders; one sub-folder per dataset (`mackey_glass/`, `lorenz/`, …).
-- `tests/`               – verbose behavioural tests that print natural-language PASS/FAIL and save figures.
-- `training/outputs/`    – default directory for training artifacts (plots, saved `.npz` models, logs).
-- `configs/`             – YAML experiment configs (e.g., `lorenz_search.yaml`, `best_lorenz_config.yaml`).
-- `experiments/`         – generic grid-search driver `grid_search.py` and helper scripts.
-- `remote/`              – automation helpers for remote GPU/CPU pods (`setup.py`, `pull_outputs.py`).
-- `training/`            – training pipeline (`training/train.py`) used by both CLI and grid-search.
-- `venv/`                – optional local Python virtual environment.
-
-## Design Philosophy: Human *and* AI Readability
-
-This project is written so that **any human researcher or AI agent** can reason
-about the codebase with minimal context switching.
-
-* **Verbose, natural-language tests** – Every behaviour test (e.g. for
-  `Memcapacitor`, dataset loaders, topology generators) prints explanatory
-  PASS/FAIL commentary instead of opaque assertions.  This lets agents judge
-  correctness directly from stdout and saved plots.
-* **Self-documenting modules** – Each folder is strictly single-responsibility
-  (`models/`, `datasets/`, `networks/…`).  Import paths are consistent and
-  enumerated in the API table below.
-* **Plug-and-play extensibility** – New topologies or datasets are discovered
-  automatically by simple file placement and decorators, no central registry
-  edit required.
-* **Clear naming & typing** – Functions and variables use descriptive names and
-  type hints so static analysers and LLMs can infer intent.
-
-
-## API Quick Reference
-
-> All paths assume your working directory is the project root (added to `PYTHONPATH`).
-
-| Purpose | Import statement | Primary callables |
-|---------|------------------|-------------------|
-| Core device model | `from models.memcapacitor import Memcapacitor` | `Memcapacitor.forward(v)` , `Memcapacitor.reset()` |
-| Generate a topology | `from networks.topologies import make_topology` | `make_topology("small_world", n_nodes=500, k=6, beta=0.2)` |
-| Build a reservoir | `from networks.reservoir import MemcapacitiveReservoir` | `reservoir = MemcapacitiveReservoir(adj_matrix, input_dim)` |
-| Load Mackey–Glass dataset | `from datasets import load_dataset` | `train, test = load_dataset("mackey_glass", length=10000)` |
-| Run device-level verbose test | `python tests/test_memcapacitor_verbose.py` | PASS/FAIL + plots |
-| Run topology verbose test | `python tests/test_topology_small_world_verbose.py` | PASS/FAIL + heat-map |
-| Run dataset verbose test | `python tests/test_dataset_mackey_glass_verbose.py` | PASS/FAIL + plot |
-| Run reservoir verbose test | `python tests/test_reservoir_forward_verbose.py` | PASS/FAIL + plot |
-| Training pipeline (numeric) | `from training.train import run` | `metrics = run(cfg)` / `python -m training.train --config cfg.yaml` |
-| Training + figure | `python -m training.train --config cfg.yaml --plot` | Saves coloured prediction PNG to `training/outputs/` |
-| Train & evaluate | `from training.train import run` | `metrics = run(cfg_dict)` or `python -m training.train --config my.yaml` |
-
-Add your own topology: create `networks/topologies/your_topology.py` containing a function decorated with `@register("your_name")` that returns an `(N, N)` `numpy.ndarray` adjacency. It will auto-register.
-
-Add your own dataset: create `datasets/your_dataset/` with `generator.py` (or similar) exposing `load()` and a minimal `__init__.py` that re-exports `load`.
-
----
-
-## Lorenz Attractor Example
-
-The framework supports multi-dimensional chaotic time-series.  The new
-`datasets/lorenz/` subpackage generates a 3-D Lorenz trajectory.
-
-Quick sweep and model export:
-```bash
-python experiments/grid_search_lorenz.py \
-    --sizes 100 200 \
-    --lams 1e-3 1e-4 0 \
-    --scales 0.5 1 2 \
-    --srs 0.7 0.9 1.1 \
-    --seeds 0 1 2 \
-    --val_ratio 0.2 \
-    --save_best best_lorenz.npz \
-    --plot
 ```
-This prints mean ± σ for validation/test MSE and saves the winning network
-(adjacent matrix, `Win`, `W_out`, and full config) to `best_lorenz.npz` for
-instant regeneration:
-```python
-import numpy as np, torch, pickle
-npz = np.load("best_lorenz.npz", allow_pickle=True)
-W, Win, W_out = map(torch.tensor, (npz["adjacency"], npz["Win"], npz["W_out"]))
-config = eval(npz["config"].item())  # or use json/pickle for safer loading
+├── configs/              # YAML configuration files for experiments and searches.
+├── datasets/             # Data loading and generation modules (e.g., Lorenz, Mackey-Glass).
+├── experiments/          # The core grid search driver script.
+├── models/               # Core device models (e.g., Memcapacitor).
+├── networks/             # Reservoir implementation and network topology generators.
+├── remote/               # Scripts for automating remote server setup and execution.
+├── tests/                # Verbose, human-readable tests for all components.
+├── training/             # The main training pipeline and output directory.
+└── README.md             # You are here!
 ```
 
 ---
 
-## Automated GPU Grid Search & Remote Execution  
-To run a fully automated, parallelized grid search on a remote GPU server (like RunPod), use our new interactive orchestrator script. This script handles everything from server setup to downloading results.
+## Extensibility
 
-```bash
-python remote/run_remote_experiment.py
-```
+This framework is designed to be easily extended.
 
-For a detailed, manual walkthrough of the process, see the guide at [`remote/REMOTE_GRID_SEARCH.md`](remote/REMOTE_GRID_SEARCH.md).
+### Adding a New Topology
 
-Key features:
+1.  Create a new file in `networks/topologies/`, e.g., `my_topology.py`.
+2.  Inside, define a function that returns a NumPy adjacency matrix.
+3.  Decorate it with `@register("my_topology_name")`.
 
-1. **YAML-driven** – All search spaces and defaults are defined in the config file so you can create new sweeps just by editing YAML.
-2. **GPU/CPU aware** – The script automatically selects `cuda` if available and sets `torch.set_num_threads(1)` inside every worker for true parallelism.
-3. **Robust regression** – Uses `torch.linalg.lstsq` to avoid singular matrix failures.
-4. **Real-time logging** – Worker and main processes stream progress and trace-backs immediately.
-5. **Remote friendly** – The `remote/setup.py` and `remote/pull_outputs.py` helpers automate cloning, dependency install, sweep execution, and result syncing on RunPod or any SSH-accessible node.
+That's it! The framework will automatically discover it, and you can now use `"my_topology_name"` in your configuration files.
 
-After the sweep, the best network and diagnostics are stored in `training/outputs/<run_name>/`. For Lorenz we committed the winning artefacts to:
+### Adding a New Dataset
 
-```
-training/outputs/lorenz_search_results/
-    ├── best_lorenz.npz
-    ├── lorenz_predictions_3d.html  # interactive Plotly
-    └── lorenz_predictions_jet.png
-```
+1.  Create a new directory in `datasets/`, e.g., `my_dataset/`.
+2.  Inside, add a `generator.py` file that exposes a `load()` function returning your data.
+3.  Add a minimal `__init__.py` in the same directory that re-exports the `load` function (`from .generator import load`).
 
-A ready-to-run config using these hyper-parameters is provided at `configs/best_lorenz_config.yaml`.
+Your new dataset is now available to the framework.
 
 ---
 
-## Verbose & Visual Outputs
+## Citation
 
-`training.train.run` emits rich diagnostics:
-
-* **Coordinate pairs** – For datasets that implement `datasets/<name>/reporting.py` with `verbose_pairs`, the pipeline prints `(ground-truth, predicted)` every *pair_stride* samples (default 2).
-* **Figure (optional)** – Pass `plot: true` in the config or `--plot` on the CLI to save a Jet-colormap scatter of predictions vs. time to `output_dir` (default `training/outputs`).
-  *The file is named `<dataset>_predictions_jet.png`; for the Lorenz example this is `training/outputs/lorenz_predictions_jet.png`.*
-  The x-axis is sample index, the y-axis is the first dimension of the predicted vector, and the colour encodes amplitude so multi-dimensional behaviour is still visible.
-
-Config keys of interest:
-```yaml
-verbose: true        # enable dataset‐specific textual output (default)
-pair_stride: 2       # sampling stride for coordinate pairs
-plot: false          # save prediction figure when true
-output_dir: outputs
-```
-
----
-
-## Reproducibility & Scientific Best-Practices
-
-This repository follows these guidelines:
-
-1. **Deterministic seeds** – all calls that involve randomness accept a `random_seed` and default to a fixed value; experiment scripts expose this via CLI.
-2. **Explicit device placement** – tensors are placed on the correct device (`cuda`/`cpu`) at creation time to avoid implicit transfers.
-3. **Separation of concerns** – data generation, model definition, training, and evaluation are in distinct modules.
-4. **Version-controlled results** – grid-search scripts can save the full winning network (`npz`) and prediction figures which are small enough to commit.
-5. **Verbose logging** – tests and training print natural-language commentary so a human (or LLM) can audit results quickly.
-
-See `tests/` and the example commands above for end-to-end, reproducible runs.
-
----
-
-## Getting Started
-
-1.  **Set up the virtual environment:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3.  **Run tests:**
-    ```bash
-    # run all verbose tests
-    python tests/test_memcapacitor_verbose.py
-    python tests/test_topology_small_world_verbose.py
-    python tests/test_dataset_mackey_glass_verbose.py
-    python tests/test_reservoir_forward_verbose.py
-    ```
+If you use this framework in your research, please consider citing it. (Citation format to be added).
