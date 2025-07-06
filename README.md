@@ -4,15 +4,47 @@ This project provides a comprehensive, extensible, and user-friendly framework f
 
 ---
 
+## Project Structure
+
+```
+.
+├── configs/
+├── datasets/
+├── experiments/
+├── models/
+├── networks/
+│   └── topologies/
+├── remote/
+├── tests/
+├── training/
+│   └── outputs/
+├── .gitignore
+├── README.md
+└── requirements.txt
+```
+
+*   `configs/`: Holds YAML configuration files for experiments, defining hyperparameters and settings for both local runs and remote grid searches.
+*   `datasets/`: Contains data loading modules. Each subdirectory is a self-contained dataset (e.g., `lorenz`, `mackey_glass`), responsible for generating or loading its specific time-series data.
+*   `experiments/`: Home to the main grid search driver (`grid_search.py`), which parallelizes training runs based on a given configuration file.
+*   `models/`: Core device models, such as the `Memcapacitor` itself. These define the fundamental building blocks of the reservoir.
+*   `networks/`: Includes the `MemcapacitiveReservoir` implementation and network topology generators.
+    *   `topologies/`: Each file (e.g., `small_world.py`) defines a specific network structure generator.
+*   `remote/`: Contains all scripts for the fully automated remote workflow, including the main orchestrator (`run_remote_experiment.py`), server setup scripts, and configuration files.
+*   `tests/`: A suite of verbose, behavioral tests that produce human-readable output and diagnostic plots to verify the correctness of each component.
+*   `training/`: Contains the core training pipeline (`train.py`), which can be run standalone or as part of a grid search.
+    *   `outputs/`: The default directory where all training artifacts (plots, logs, and saved models) are stored.
+
+---
+
 ## Table of Contents
 
-1.  [Getting Started](#getting-started)
-2.  [Project Philosophy](#design-philosophy-human-and-ai-readability)
+1.  [Project Structure](#project-structure)
+2.  [Getting Started](#getting-started)
 3.  [Running Experiments](#running-experiments)
     *   [Local Training](#local-training-example)
     *   [Automated Remote Grid Search](#automated-remote-gpu-grid-search)
-4.  [Project Structure](#project-structure)
-5.  [Extensibility](#extensibility)
+4.  [Extensibility](#extensibility)
+5.  [Project Philosophy](#design-philosophy-human-and-ai-readability)
 6.  [Scientific Best Practices](#reproducibility--scientific-best-practices)
 
 ---
@@ -51,17 +83,6 @@ python tests/test_topology_small_world_verbose.py
 python tests/test_dataset_mackey_glass_verbose.py
 python tests/test_reservoir_forward_verbose.py
 ```
-
----
-
-## Design Philosophy: Human *and* AI Readability
-
-This project is written so that **any human researcher or AI agent** can reason about the codebase with minimal context switching.
-
-*   **Verbose, Natural-Language Tests**: Every behavior test prints explanatory PASS/FAIL commentary and saves plots, allowing correctness to be judged directly from the output.
-*   **Self-Documenting Modules**: Each folder has a single, clear responsibility (`models/`, `datasets/`, `networks/`).
-*   **Plug-and-Play Extensibility**: New topologies and datasets are discovered automatically via decorators, requiring no central registration.
-*   **Clear Naming & Typing**: Functions and variables use descriptive names and type hints to make the code easy to understand and analyze.
 
 ---
 
@@ -104,19 +125,6 @@ This script provides a beautifully formatted, real-time log, including a static,
 
 ---
 
-## Project Structure
-
--   `configs/`: YAML configuration files for experiments and grid searches.
--   `datasets/`: Data loading modules. Each subdirectory is a self-contained dataset.
--   `experiments/`: The main grid search driver (`grid_search.py`).
--   `models/`: Core device models, such as the `Memcapacitor`.
--   `networks/`: Reservoir computer logic and network topology generators.
--   `remote/`: Scripts for automating remote server setup and experiment execution.
--   `tests/`: Verbose, behavioral tests that produce plots and clear pass/fail messages.
--   `training/`: The core training pipeline (`train.py`) and default output directory for artifacts.
-
----
-
 ## Extensibility
 
 Adding your own components is designed to be simple:
@@ -125,6 +133,17 @@ Adding your own components is designed to be simple:
 *   **Add a Dataset**: Create a `datasets/your_dataset/` directory containing a `generator.py` file that exposes a `load()` function.
 
 The framework will automatically discover and register these new components.
+
+---
+
+## Design Philosophy: Human *and* AI Readability
+
+This project is written so that **any human researcher or AI agent** can reason about the codebase with minimal context switching.
+
+*   **Verbose, Natural-Language Tests**: Every behavior test prints explanatory PASS/FAIL commentary and saves plots, allowing correctness to be judged directly from the output.
+*   **Self-Documenting Modules**: Each folder has a single, clear responsibility (`models/`, `datasets/`, `networks/`).
+*   **Plug-and-Play Extensibility**: New topologies and datasets are discovered automatically via decorators, requiring no central registration.
+*   **Clear Naming & Typing**: Functions and variables use descriptive names and type hints to make the code easy to understand and analyze.
 
 ---
 
