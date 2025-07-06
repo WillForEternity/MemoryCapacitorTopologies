@@ -126,7 +126,6 @@ def run_grid(config_path: str):
         future_to_cfg = {executor.submit(_run_single, cfg): cfg for cfg in run_configs}
         print("All jobs submitted. Waiting for results...", flush=True)
 
-
         # Use tqdm for a clean progress bar
         pbar = tqdm(concurrent.futures.as_completed(future_to_cfg), total=len(run_configs), desc="Grid Search")
         for future in pbar:

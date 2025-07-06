@@ -6,7 +6,6 @@ import select
 import subprocess
 import sys
 import yaml
-from datetime import datetime
 
 # --- Helpers ---
 
@@ -24,13 +23,13 @@ def print_color(text, color):
     sys.stdout.write(colors.get(color, "") + text + colors["end"] + "\n")
     sys.stdout.flush()
 
-def run_command(command, step_name, interactive=False, prefix_output=True):
-    """Runs a command, streaming output. For interactive commands, uses a robust, manually-managed PTY."""
+def run_command(command, step_name):
+    """Runs a command, streaming its output. For the grid search, uses a PTY."""
     print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
     try:
-        if interactive:
-            # Use a manually managed PTY for full, unbuffered control. This is the
-            # definitive fix for the server's non-standard SSH behavior.
+        if step_name == "Launching Grid Search":
+            # Use a manually managed PTY for full, unbuffered control over I/O.
+            # This is the key to making remote tqdm work correctly.
             master_fd, slave_fd = pty.openpty()
 
             process = subprocess.Popen(
@@ -39,7 +38,6 @@ def run_command(command, step_name, interactive=False, prefix_output=True):
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,
-                text=False  # Work with bytes for raw PTY I/O
             )
             os.close(slave_fd)
 
@@ -48,6 +46,7 @@ def run_command(command, step_name, interactive=False, prefix_output=True):
                     r, _, _ = select.select([master_fd], [], [], 0.1)
                     if r:
                         try:
+                            # Read raw bytes and write directly to stdout buffer
                             data = os.read(master_fd, 1024)
                             if data:
                                 sys.stdout.buffer.write(data)
@@ -61,20 +60,16 @@ def run_command(command, step_name, interactive=False, prefix_output=True):
 
             return_code = process.wait()
             if return_code != 0:
+                # Add a newline to not overwrite the last line of failed output
                 print_color(f"\n[✖] Command failed with exit code {return_code}.", "red")
                 return False
         else:
             # Standard non-interactive command execution
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-            if prefix_output:
-                prefix = f"[{step_name}] | "
-                for line in iter(process.stdout.readline, ''):
-                    sys.stdout.write(f"{prefix}{line.rstrip()}\n")
-                    sys.stdout.flush()
-            else: # Stream raw output
-                for line in iter(process.stdout.readline, ''):
-                    sys.stdout.write(line)
-                    sys.stdout.flush()
+            prefix = f"[{step_name}] | "
+            for line in iter(process.stdout.readline, ''):
+                sys.stdout.write(f"{prefix}{line.rstrip()}\n")
+                sys.stdout.flush()
             
             process.stdout.close()
             rc = process.wait()
@@ -144,61 +139,32 @@ def update_pods_yaml(uri, port, key_path):
 # --- Main Orchestrator ---
 
 def main():
-    parser = argparse.ArgumentParser(description="Fully Automated Remote Grid Search Orchestrator.")
-    parser.add_argument('--ssh-string', type=str, help="Full SSH connection string from RunPod.")
+    parser = argparse.ArgumentParser(description="Automated Remote Grid Search Orchestrator.")
+    parser.add_argument('--ssh-string', type=str, help="Full SSH connection string from RunPod (e.g., 'root@1.2.3.4 -p 12345').")
     parser.add_argument('--key-path', type=str, help="Full path to your SSH private key.")
     parser.add_argument('--config', type=str, help="Path to the grid search YAML config file.")
-    parser.add_argument('--no-sync', action='store_true', help="Skip the automatic git add, commit, and push.")
     args = parser.parse_args()
 
-    # --- Step 0: Git Sync ---
-    if not args.no_sync:
-        commit_message = f"Auto-sync before experiment run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        if not run_command(['git', 'add', '.'], "Staging Changes"):
-            sys.exit(1)
-        # Only commit if there are staged changes
-        if subprocess.run(['git', 'diff', '--staged', '--quiet']).returncode != 0:
-            if not run_command(['git', 'commit', '-m', commit_message], "Committing Changes"):
-                sys.exit(1)
-            if not run_command(['git', 'push'], "Pushing to Remote"):
-                sys.exit(1)
-        else:
-            print_color("\n[INFO] No changes to commit. Skipping sync.", "blue")
-    else:
-        print_color("\n[INFO] Skipping Git sync as requested.", "blue")
-
-    # --- Step 1: Get User Input & Configure ---
+    # --- Step 1: Get User Input ---
     user_input = get_user_input(args)
     if not all(user_input.values()):
         print_color("[✖] All inputs are required. Exiting.", "red")
-        sys.exit(1)
+        return
 
+    # --- Step 2: Configure pods.yml ---
     ssh_details = parse_ssh_string(user_input['ssh_string'])
     if not ssh_details:
-        sys.exit(1)
+        return
     
     if not update_pods_yaml(ssh_details['uri'], ssh_details['port'], user_input['key_path']):
-        sys.exit(1)
-
-    # --- Step 2: Kill Lingering Remote Processes ---
-    # The remote server requires a TTY for all commands, so we run this interactively.
-    kill_command = [
-        "ssh", "-t", # Force TTY allocation
-        "-i", os.path.expanduser(user_input['key_path']),
-        "-p", ssh_details['port'], ssh_details['uri'],
-        # Wrap in bash -c for robustness and add a sleep to prevent the server
-        # from terminating an extremely short-lived session with an error.
-        "bash -c \"pkill -f 'grid_search.py' || true; echo 'Remote processes cleaned.'; sleep 1\""
-    ]
-    if not run_command(kill_command, "Cleaning Remote Processes", interactive=True):
-        sys.exit(1)
+        return
 
     # --- Step 3: Provision the Remote Server ---
-    if not run_command(['python', 'remote/setup.py'], "Provisioning Server", prefix_output=False):
+    if not run_command(['python', 'remote/setup.py'], "Provisioning Server"):
         print_color("[✖] Failed to provision the remote server. Please check the logs.", "red")
-        sys.exit(1)
+        return
 
-    # --- Step 4: Launch the Grid Search (Interactive) ---
+    # --- Step 4: Launch the Grid Search ---
     ssh_command = [
         "ssh", "-t",  # Force TTY allocation for interactive tqdm rendering
         "-i", os.path.expanduser(user_input['key_path']),
@@ -210,14 +176,14 @@ def main():
             f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}"
         )
     ]
-    if not run_command(ssh_command, "Launching Grid Search", interactive=True):
+    if not run_command(ssh_command, "Launching Grid Search"):
         print_color("[✖] Grid search failed. Please check the logs.", "red")
-        sys.exit(1)
+        return
 
     # --- Step 5: Retrieve Results ---
-    if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results", prefix_output=False):
+    if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results"):
         print_color("[✖] Failed to retrieve results. You may need to run 'python remote/pull_outputs.py' manually.", "red")
-        sys.exit(1)
+        return
     
     print_color("\n--- All Steps Complete! ---", "green")
     print_color("Your experiment results have been downloaded to the 'training/outputs' directory.", "blue")
