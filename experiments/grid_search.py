@@ -119,6 +119,7 @@ def run_grid(config_path: str):
 
     best_val_mse = float("inf")
     best_metrics = None
+    target_mse = search_opts.get("target_mse")
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=search_opts.get("workers", 4)) as executor:
         print(f"Submitting {len(run_configs)} jobs to the process pool ({search_opts.get('workers', 4)} workers)...", flush=True)
@@ -148,6 +149,12 @@ def run_grid(config_path: str):
                 if val_mse < best_val_mse:
                     best_val_mse = val_mse
                     best_metrics = metrics
+                    # Early stop if target reached
+                    if target_mse is not None and best_val_mse < target_mse:
+                        print(f"[✓] Target MSE {target_mse} reached (val_mse={best_val_mse:.4f}). Cancelling remaining jobs…", flush=True)
+                        for fut in future_to_cfg.keys():
+                            fut.cancel()
+                        break
             except Exception as exc:
                 print(f"({i+1}/{len(param_combos)}) [✘] FAILED -> {exc}", flush=True)
 
