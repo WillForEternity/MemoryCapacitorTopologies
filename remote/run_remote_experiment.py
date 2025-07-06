@@ -9,7 +9,7 @@ import yaml
 
 # --- Helpers ---
 
-def print_color(text, color):
+def print_color(text, color, end='\n'):
     """Prints text in a given color."""
     colors = {
         "red": "\033[91m",
@@ -20,7 +20,7 @@ def print_color(text, color):
         "cyan": "\033[96m",
         "end": "\033[0m",
     }
-    sys.stdout.write(colors.get(color, "") + text + colors["end"] + "\n")
+    sys.stdout.write(colors.get(color, "") + text + colors["end"] + end)
     sys.stdout.flush()
 
 def run_command(command, step_name):
@@ -84,25 +84,34 @@ def run_command(command, step_name):
         return False
 
 def get_user_input(args):
-    """Gets required inputs from the user interactively if not provided as args."""
-    inputs = {}
-    if args.ssh_string:
-        inputs['ssh_string'] = args.ssh_string
-    else:
-        inputs['ssh_string'] = input(print_color("Please paste your full SSH connection string from RunPod (e.g., root@1.2.3.4 -p 12345): ", "cyan"))
+    """Gets required inputs from the user, falling back to interactive prompts."""
+    # SSH String
+    ssh_string = args.ssh_string
+    if not ssh_string:
+        print_color("Please paste your full SSH connection string from RunPod (e.g., root@1.2.3.4 -p 12345): ", "cyan", end="")
+        ssh_string = sys.stdin.readline().strip()
 
-    if args.key_path:
-        inputs['key_path'] = args.key_path
-    else:
+    # Key Path
+    key_path = args.key_path
+    if not key_path:
         default_key = os.path.expanduser("~/.ssh/id_ed25519")
-        inputs['key_path'] = input(print_color(f"Enter the full path to your SSH private key [default: {default_key}]: ", "cyan")) or default_key
-
-    if args.config:
-        inputs['config_path'] = args.config
-    else:
-        inputs['config_path'] = input(print_color("Enter the path to your grid search config file (e.g., configs/lorenz_search.yaml): ", "cyan"))
-
-    return inputs
+        print_color(f"Enter the full path to your SSH private key [default: {default_key}]: ", "cyan", end="")
+        key_path_input = sys.stdin.readline().strip()
+        key_path = key_path_input or default_key
+    
+    # Config Path
+    config_path = args.config
+    if not config_path:
+        default_config = "configs/lorenz_random_search.yaml"
+        print_color(f"Enter the path to your grid search config file [default: {default_config}]: ", "cyan", end="")
+        config_input = sys.stdin.readline().strip()
+        config_path = config_input or default_config
+        
+    return {
+        'ssh_string': ssh_string,
+        'key_path': os.path.expanduser(key_path),
+        'config_path': config_path
+    }
 
 def parse_ssh_string(ssh_string):
     """Parses the user@host and port from an SSH connection string."""
@@ -140,9 +149,9 @@ def update_pods_yaml(uri, port, key_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Automated Remote Grid Search Orchestrator.")
-    parser.add_argument('--ssh-string', type=str, help="Full SSH connection string from RunPod (e.g., 'root@1.2.3.4 -p 12345').")
-    parser.add_argument('--key-path', type=str, help="Full path to your SSH private key.")
-    parser.add_argument('--config', type=str, help="Path to the grid search YAML config file.")
+    parser.add_argument('--ssh-string', type=str, default=None, help="Full SSH connection string from RunPod (e.g., 'root@1.2.3.4 -p 12345').")
+    parser.add_argument('--key-path', type=str, default=None, help="Full path to your SSH private key.")
+    parser.add_argument('--config', type=str, default=None, help="Path to the grid search YAML config file.")
     args = parser.parse_args()
 
     # --- Step 1: Get User Input ---
