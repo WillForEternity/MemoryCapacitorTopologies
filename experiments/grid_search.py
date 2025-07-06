@@ -173,8 +173,8 @@ def run_grid(config_path: str):
                             print(f"\n[✓] Target MSE {target_mse} reached (val_mse={best_val_mse_ref.value:.4f}). Signalling workers to stop…")
                             stop_early_event.set()
                 except Exception as exc:
-                    # Errors will be printed to the main console after the display loop finishes
-                    pass
+                    # Print errors immediately for better debugging
+                    print(f"\n[!] Worker failed with an exception: {exc}", flush=True)
     finally:
         stop_display_event.set()
         display_thread.join()
