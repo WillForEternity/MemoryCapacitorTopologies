@@ -59,9 +59,9 @@ def run(cfg: Dict[str, Any]):
         val_seq = None
 
     # ---------------- Reservoir -------------
-    # Infer input dimension from the dataset and add it to the reservoir config.
+    # Infer input dimension from the dataset and inject it into the reservoir config.
     res_bundle_cfg = cfg["reservoir_bundle"]
-    res_bundle_cfg["input_dim"] = train_seq.shape[-1]
+    res_bundle_cfg["reservoir"]["input_dim"] = train_seq.shape[-1]
     res = reservoir_builder.build(res_bundle_cfg)
 
     def _collect_states(seq: torch.Tensor, washout: int = 10):
