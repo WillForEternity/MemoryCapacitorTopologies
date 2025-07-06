@@ -49,13 +49,14 @@ def _generate(
 
 def load(
     length: int = 10000,
-    train_ratio: float = 0.7,
+    split: float = 0.7,
     seed: int | None = None,
+    **kwargs,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return normalised (train, test) tensors suitable for time-series tasks."""
-    series = _generate(length=length, seed=seed)
+    series = _generate(length=length, seed=seed, **kwargs)
     series = (series - series.min()) / (series.max() - series.min())
-    split = int(train_ratio * len(series))
-    train = torch.from_numpy(series[:split]).float().unsqueeze(-1)
-    test = torch.from_numpy(series[split:]).float().unsqueeze(-1)
+    split_idx = int(split * len(series))
+    train = torch.from_numpy(series[:split_idx]).float().unsqueeze(-1)
+    test = torch.from_numpy(series[split_idx:]).float().unsqueeze(-1)
     return train, test
