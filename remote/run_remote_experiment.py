@@ -127,7 +127,7 @@ def main():
 
     # --- Step 4: Launch the Grid Search ---
     ssh_command = [
-        "ssh", "-t",
+        "ssh", # Removed -t to prevent pseudo-terminal allocation issues with tqdm
         "-i", os.path.expanduser(user_input['key_path']),
         "-p", ssh_details['port'],
         ssh_details['uri'],

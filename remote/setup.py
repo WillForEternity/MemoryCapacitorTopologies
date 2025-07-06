@@ -10,9 +10,8 @@ and then for each host runs a small shell bootstrap via ``ssh``:
 
 1. Ensure git and (mini)conda are present.
 2. Create / update the specified conda environment.
-3. Install lightweight Python packages that are **not** present on the base
-   image (networkx, matplotlib, tqdm, PyYAML).
-4. Clone (or ``git pull``) the project repository at the requested branch.
+3. Clone (or ``git pull``) the project repository at the requested branch.
+4. Install Python dependencies from the repository's requirements.txt file.
 
 After finishing it prints a short success / failure table.
 
@@ -59,9 +58,23 @@ class Pod:
 # -----------------------------------------------------------------------------
 
 
-def run_remote(pod: Pod, remote_cmd: str):
+def run_remote(pod: Pod, remote_cmd: str, print_cmd: bool = True):
+    """Runs a command on a remote pod and streams the output in real-time."""
     cmd = pod.ssh_prefix() + [remote_cmd]
-    return subprocess.run(cmd, capture_output=True, text=True)
+    if print_cmd:
+        print(f"[*] Running remote command: {remote_cmd}")
+
+    # Use Popen to stream output in real-time. The parent script
+    # (run_remote_experiment.py) will capture and prefix this output.
+    process = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+    )
+
+    if process.stdout:
+        for line in iter(process.stdout.readline, ""):
+            print(line, end="", flush=True)
+
+    return process.wait()
 
 
 def main(path: Path):
@@ -81,6 +94,7 @@ def main(path: Path):
         run_remote(
             pod,
             "sudo apt-get update -qq && sudo apt-get install -y git wget bzip2 >/dev/null 2>&1 || true",
+            print_cmd=False,
         )
 
         # 2. Ensure conda exists, otherwise install Miniconda silently
@@ -92,29 +106,35 @@ def main(path: Path):
                 "bash /tmp/mc.sh -b -p $HOME/miniconda && "
                 "echo 'export PATH=$HOME/miniconda/bin:$PATH' >> ~/.bashrc)"
             ),
+            print_cmd=False,
         )
 
         # 3. Create env if needed
-        create_env = f"$HOME/miniconda/bin/conda create -y -n {env} python={py_ver} || true"
-        run_remote(pod, create_env)
+        create_env = f"$HOME/miniconda/bin/conda create -y -n {env} python={py_ver}"
+        return_code = run_remote(pod, create_env)
+        if return_code != 0:
+            print(
+                f"[!] Conda create failed with exit code {return_code}", file=sys.stderr
+            )
 
-        # 3. Install python deps (light extras only)
-        pip_install = (
-            f"$HOME/miniconda/bin/conda run -n {env} pip install --quiet --upgrade networkx matplotlib tqdm pyyaml"
-        )
-        run_remote(pod, pip_install)
-
-        # 4. Clone / update repo
+        # 4. Clone / update repo first to get requirements.txt
         clone_cmd = (
             f"[ ! -d MemoryCapacitorTopologies ] && "
             f"git clone --depth 1 -b {branch} {repo} || "
             f"(cd MemoryCapacitorTopologies && git fetch origin {branch} && git checkout {branch} && git pull)"
         )
-        res = run_remote(pod, clone_cmd)
-        if res.returncode == 0:
-            print(f"[✔] {pod.name} ready")
+        return_code = run_remote(pod, clone_cmd)
+        if return_code != 0:
+            print(f"[!] Git clone/pull failed with exit code {return_code}", file=sys.stderr)
+            continue  # Can't proceed if repo is not there
+
+        # 5. Install python deps from requirements file
+        pip_install = f"$HOME/miniconda/bin/conda run -n {env} pip install -r MemoryCapacitorTopologies/requirements.txt"
+        return_code = run_remote(pod, pip_install)
+        if return_code != 0:
+            print(f"[!] Pip install failed with exit code {return_code}!", file=sys.stderr)
         else:
-            print(f"[✘] {pod.name} failed. stderr:\n{res.stderr}", file=sys.stderr)
+            print(f"[✔] {pod.name} ready")
 
 
 if __name__ == "__main__":
