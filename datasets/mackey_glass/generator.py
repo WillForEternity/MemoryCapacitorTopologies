@@ -54,7 +54,15 @@ def load(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return normalised (train, test) tensors suitable for time-series tasks."""
     series = _generate(length=length, seed=seed)
-    series = (series - series.min()) / (series.max() - series.min())
+
+    # Safely normalize the series to [0, 1], handling constant series.
+    s_min, s_max = series.min(), series.max()
+    delta = s_max - s_min
+    if delta > 1e-8:
+        series = (series - s_min) / delta
+    else:
+        # If the series is constant, normalize to all zeros.
+        series = np.zeros_like(series)
     split = int(train_ratio * len(series))
     train = torch.from_numpy(series[:split]).float().unsqueeze(-1)
     test = torch.from_numpy(series[split:]).float().unsqueeze(-1)
