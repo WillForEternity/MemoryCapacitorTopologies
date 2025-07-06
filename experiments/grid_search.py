@@ -92,7 +92,7 @@ def _run_single(cfg: Dict[str, Any], worker_status: Dict[int, str], stop_early_e
             del worker_status[pid]
 
 
-def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event):
+def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event, num_workers):
     """A thread to manage the live display of worker statuses."""
     while not stop_event.is_set():
         sys.stdout.write('\x1b[2J\x1b[H')  # ANSI codes to clear screen and move to top-left
@@ -109,8 +109,12 @@ def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event)
         sys.stdout.write("\n--- Worker Activity ---\n")
 
         active_workers = list(status_dict.items())
-        for i, (pid, desc) in enumerate(active_workers):
-            sys.stdout.write(f"Worker {i+1} (PID {pid}): {desc}\n")
+        for i in range(num_workers):
+            if i < len(active_workers):
+                pid, desc = active_workers[i]
+                sys.stdout.write(f"Worker {i+1:02d} (PID {pid}): {desc}\n")
+            else:
+                sys.stdout.write(f"Worker {i+1:02d} (PID -----): Idle\n")
         
         sys.stdout.flush()
         time.sleep(0.5)
@@ -156,7 +160,7 @@ def run_grid(config_path: str, n_nodes: int | None = None, save_path_override: s
 
     display_thread = threading.Thread(
         target=_display_status,
-        args=(worker_status, len(run_configs), completed_count, best_val_mse_ref, stop_display_event)
+        args=(worker_status, len(run_configs), completed_count, best_val_mse_ref, stop_display_event, num_workers)
     )
     display_thread.start()
 
