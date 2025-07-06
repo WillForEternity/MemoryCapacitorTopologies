@@ -154,7 +154,8 @@ def main():
 
     # --- Step 2: Kill Lingering Remote Processes ---
     kill_command = [
-        "ssh", "-i", os.path.expanduser(user_input['key_path']),
+        "ssh", "-T",  # Disable pseudo-tty allocation for non-interactive command
+        "-i", os.path.expanduser(user_input['key_path']),
         "-p", ssh_details['port'], ssh_details['uri'],
         # Wrap in bash -c for robustness
         "bash -c \"pkill -f 'grid_search.py' || true\""
