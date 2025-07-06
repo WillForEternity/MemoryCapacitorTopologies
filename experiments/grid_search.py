@@ -48,13 +48,6 @@ def set_nested(d: dict, keys: str, value: Any):
     d[last_key] = value
 
 
-def get_nested(d: dict, keys: str) -> Any:
-    """Get a value from a nested dictionary using a dot-separated key string."""
-    for key in keys.split('.'):
-        d = d[key]
-    return d
-
-
 def _save_best(file: str | Path, metrics: dict):
     """Save the best performing model's weights and config."""
     file = Path(file)
@@ -67,12 +60,7 @@ def _save_best(file: str | Path, metrics: dict):
     print(f"\n[✔] Best network saved to {file}")
 
 
-def _run_single(
-    cfg: Dict[str, Any],
-    param_keys: list[str],
-    worker_status: Dict[int, str],
-    stop_early_event: multiprocessing.Event,
-) -> Dict[str, Any] | None:
+def _run_single(cfg: Dict[str, Any], worker_status: Dict[int, str], stop_early_event: multiprocessing.Event) -> Dict[str, Any] | None:
     """A single grid-search evaluation. Must be a top-level function."""
     if stop_early_event.is_set():
         return None
@@ -80,18 +68,14 @@ def _run_single(
     try:
         # CRITICAL: Prevent CPU thrashing when running many parallel jobs.
         torch.set_num_threads(1)
-
-        # Dynamically create a description from the parameter grid
-        desc_parts = []
-        for key in param_keys:
-            short_key = key.split('.')[-1]
-            value = get_nested(cfg, key)
-            # Use scientific notation for small floats, otherwise default
-            if isinstance(value, float) and abs(value) < 1e-2:
-                desc_parts.append(f"{short_key}={value:.1e}")
-            else:
-                desc_parts.append(f"{short_key}={value}")
-        worker_status[pid] = ", ".join(desc_parts)
+        # Create a concise identifier for logging
+        n_nodes = cfg['reservoir_bundle']['topology']['params']['n_nodes']
+        sr = cfg['reservoir_bundle']['reservoir']['spectral_radius']
+        scale = cfg['reservoir_bundle']['reservoir']['input_scale']
+        lam = cfg['ridge_lam']
+        seed = cfg['reservoir_bundle']['reservoir']['random_seed']
+        desc = f"nodes={n_nodes}, sr={sr}, scale={scale}, lam={lam}, seed={seed}"
+        worker_status[pid] = desc
 
         # Suppress verbose output from individual runs
         cfg["verbose"] = False
@@ -171,13 +155,8 @@ def run_grid(config_path: str):
 
     try:
         with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-            # Pass the keys from the param_grid so each worker can report them dynamically
-            param_keys = list(param_grid.keys())
-            future_to_cfg = {
-                executor.submit(_run_single, cfg, param_keys, worker_status, stop_early_event): cfg
-                for cfg in run_configs
-            }
-
+            future_to_cfg = {executor.submit(_run_single, cfg, worker_status, stop_early_event): cfg for cfg in run_configs}
+            
             for future in concurrent.futures.as_completed(future_to_cfg):
                 completed_count.value += 1
                 try:

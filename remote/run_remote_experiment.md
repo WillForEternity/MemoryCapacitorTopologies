@@ -69,3 +69,8 @@ If this is your first time using this system, you will need to perform a one-tim
 3.  Ensure you have the necessary local tools like `git` and `conda` installed.
 
 Once your server is running and accessible via SSH, the automated workflow above is all you need.
+
+
+```bash
+python remote/run_remote_experiment.py --ssh-string "root@157.157.221.29 -p 23202" --key-path "/Users/willnorden/.ssh/id_ed25519" --config "configs/mackey_glass_random_search.yaml"
+```
