@@ -28,11 +28,11 @@ search_options:
   plot_best: true
 
 param_grid:
-  reservoir_bundle.topology.params.n_nodes: [50, 100, 256, 512]
-  reservoir_bundle.topology.params.k: [2, 4, 8]
-  reservoir_bundle.topology.params.beta: [0.1, 0.2, 0.5]
-  reservoir_bundle.reservoir.input_scale: [0.01, 0.05, 0.1, 0.5, 1.0, 1.5]
-  reservoir_bundle.reservoir.spectral_radius: [0.9, 0.95, 0.99, 1.0, 1.01, 1.05]
-  reservoir_bundle.reservoir.random_seed: [0, 1, 2, 3]
-  dataset.params.seed: [42, 1337]
-  ridge_lam: [1.e-2, 1.e-3, 1.e-4, 1.e-5, 1.e-6]
+  reservoir_bundle.topology.params.n_nodes: [32, 64]
+  reservoir_bundle.topology.params.k: [4]
+  reservoir_bundle.topology.params.beta: [0.2]
+  reservoir_bundle.reservoir.input_scale: [0.001, 0.01, 0.1]
+  reservoir_bundle.reservoir.spectral_radius: [0.8, 0.9, 0.99]
+  reservoir_bundle.reservoir.random_seed: [0]
+  dataset.params.seed: [42]
+  ridge_lam: [1.e-5, 1.e-6, 1.e-7]
