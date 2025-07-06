@@ -154,7 +154,7 @@ def run(cfg: Dict[str, Any]):
             ax.set_title('Lorenz trajectory – target (line) vs pred (dots)')
             ax.legend()
         else:
-            t = np.arange(len(y_pred))
+            t = np.arange(len(y_true))
             fig, ax = plt.subplots(figsize=(8, 3))
             sc = ax.scatter(
                 t,
