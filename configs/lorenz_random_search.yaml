@@ -23,7 +23,7 @@ base_config:
 # product, so keep the list lengths reasonable for local runs or set workers
 # large when using a GPU pod.
 param_grid:
-  reservoir_bundle.topology.params.n_nodes: [256, 512, 768, 1024, 1536, 2048]
+  reservoir_bundle.topology.params.n_nodes: [50, 100, 256, 512, 1024, 2048]
   reservoir_bundle.reservoir.input_scale: [0.6, 0.4, 0.2, 0.1, 0.05]
   reservoir_bundle.reservoir.spectral_radius: [1.0, 0.95, 0.9, 0.8, 0.7, 0.6]
   reservoir_bundle.reservoir.random_seed: [0, 1, 2, 3]
