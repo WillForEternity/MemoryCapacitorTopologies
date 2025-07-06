@@ -98,7 +98,7 @@ def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event)
         best_mse = best_mse_ref.value
         
         header = f"--- Grid Search Status ---"
-        progress = f"Progress: {completed}/{total} ({completed/total:.1%}) | Best MSE: {best_mse:.5f if best_mse != float('inf') else 'N/A'}"
+        progress = f"Progress: {completed}/{total} ({completed/total:.1%}) | Best MSE: {'N/A' if best_mse == float('inf') else f'{best_mse:.5f}'}"
         
         sys.stdout.write(header + '\n')
         sys.stdout.write(progress + '\n')
