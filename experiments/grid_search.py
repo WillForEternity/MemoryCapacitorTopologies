@@ -132,6 +132,7 @@ def run_grid(config_path: str, n_nodes: int | None = None, save_path_override: s
             del param_grid['reservoir_bundle.topology.params.n_nodes']
         # Set it in the base config for all runs in this process
         set_nested(base_cfg, 'reservoir_bundle.topology.params.n_nodes', n_nodes)
+
     search_opts = search_spec["search_options"]
     num_workers = search_opts.get("workers", 4)
 
