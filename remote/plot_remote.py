@@ -43,7 +43,10 @@ def main():
     config["html_path"] = str(output_dir / f"{model_path.stem}_predictions_3d.html")
 
     # Load the model weights into the config
-    config["reservoir_bundle"]["reservoir"]["adjacency_matrix"] = config["reservoir_bundle"]["topology"]["params"]["adjacency_matrix"] = str(model_path)
+    with np.load(model_path, allow_pickle=True) as data:
+        config['reservoir_bundle']['reservoir']['adjacency_matrix'] = data['adjacency']
+        config['reservoir_bundle']['reservoir']['Win'] = data['Win']
+        config['W_out'] = data['W_out']
 
     print(f"[plot_remote] Generating plots for {model_path.name}...")
     print(f"[plot_remote]   - PNG -> {config['fig_path']}")
