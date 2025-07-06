@@ -1,179 +1,176 @@
-# Remote GPU Grid Search Workflow
+# The Ultimate Beginner's Guide to Remote GPU Grid Searching
 
-This guide explains **exactly** how to spin up a fresh GPU (or CPU) pod on a cloud provider such as RunPod, clone the repository, install dependencies, execute a YAML-driven grid search, and synchronise the results back to your local machine.  The process is fully automated – once the pod is running you can kick off the search with a single command.
+# The Ultimate Guide to Remote GPU Grid Searching
 
-> **TL;DR** – Already have a pod?  Jump to **Quick Start**.
-
----
-
-## 0  Prerequisites
-
-| Item | Notes |
-|------|-------|
-| SSH key on your **local** machine | The pod will be accessed via key-based auth (no passwords).  The default key is `~/.ssh/id_ed25519`. |
-| Python ≥ 3.10 + `conda` (recommended) **on the pod** | The `remote/setup.py` script will install Miniforge automatically if Conda is missing. |
-| Internet egress from the pod | Required to `git clone` the repo and `pip install` dependencies. |
-| An entry in `remote/pods.yml` | Describes the pod’s SSH endpoint(s) so the helper scripts know where to connect. |
-
-Example `pods.yml`:
-```yaml
-runpod_gpu1:
-  host: 157.157.221.29
-  port: 23202
-  user: root              # RunPod default
-  key: ~/.ssh/id_ed25519  # local path to *private* key
-```
+> **The Easy Way:** We have created a fully automated script that handles this entire process for you. For the simplest experience, please use it!
+> 
+> ```bash
+> # Run this command from the project root
+> python remote/run_remote_experiment.py
+> ```
+> 
+> This script will ask for your server details and config file, then run all the steps below automatically. The rest of this guide serves as a detailed, manual walkthrough for those who want to understand each step of the process.
 
 ---
 
-## 1  Provision a RunPod Instance
+Welcome! This guide will walk you through every step of running a powerful, automated hyperparameter search on a remote GPU server. Even if you've never used a remote server, `ssh`, or `git` before, this tutorial will make the process simple and clear.
 
-1. Log into the RunPod dashboard.
-2. Launch a **Secure Cloud GPU** (Ubuntu 22.04, CUDA 11 or later).
-3. Enable `SSH` and note the `IP`, `Port`, and **root** username.
-4. Add your **public** SSH key in the *SSH Keys* panel.
-5. Wait for the pod status to turn **Running**.
+**What you will accomplish:** You will rent a powerful GPU in the cloud, automatically set it up with a single command, run a complex experiment that would be too slow for your laptop, and download the results for analysis.
 
 ---
 
-## 2  Automated One-Time Setup (`remote/setup.py`)
+## Part 1: Setting Up Your Local Machine (One-Time Setup)
 
-From your *local* project root:
+Before we can talk to the remote server, we need to set up a few tools on your own computer.
 
-```bash
-python remote/setup.py --pod runpod_gpu1
-```
+### 1.1: Install Git
+*   **What it is:** Git is a tool for managing and downloading code.
+*   **How to install:**
+    *   **Windows/macOS:** [Download Git here](https://git-scm.com/downloads).
+    *   **Linux:** Open a terminal and run `sudo apt-get install git`.
+*   **Verify installation:** Open a terminal and run `git --version`. You should see a version number.
 
-What this does:
+### 1.2: Install Conda
+*   **What it is:** Conda is a tool for managing Python versions and libraries.
+*   **How to install:** Download and install the **Miniconda** installer from [this page](https://docs.conda.io/en/latest/miniconda.html). It's small and has everything we need.
+*   **Verify installation:** Open a new terminal and run `conda --version`.
 
-1. **SSH → pod**.
-2. Installs **Miniforge + conda** (if absent) and creates env `rc`.
-3. `git clone https://github.com/WillForEternity/MemoryCapacitorTopologies.git` into `~/MemoryCapacitorTopologies` on the pod.
-4. Installs Python requirements inside the env.
-5. Prints the exact command to start a grid search.
+### 1.3: Get the Project Code
+*   Now, let's download the code for this project from GitHub.
+*   Open a terminal, navigate to where you want to store the project, and run:
+    ```bash
+    git clone https://github.com/WillForEternity/MemoryCapacitorTopologies.git
+    ```
+*   Move into the newly created project directory:
+    ```bash
+    cd MemoryCapacitorTopologies
+    ```
 
-You can rerun the script at any time – it is idempotent and will simply `git pull` if the repo already exists.
-
----
-
-## 3  Launch the Grid Search
-
-SSH into the pod (or let `setup.py` do it for you) and run:
-
-```bash
-conda activate rc
-cd ~/MemoryCapacitorTopologies
-python experiments/grid_search.py \
-       --config configs/lorenz_search.yaml \
-       --workers 8
-```
-
-Flags explained:
-
-- `--config` – YAML describing search space and default values.
-- `--workers` – number of parallel Python processes.  For a single GPU choose the number of **physical** CPU cores to keep utilisation high without context-switch overhead.
-
-**Tip:** add `--name my_run` to override the timestamped output directory.
-
-Real-time logs stream to the terminal; tracebacks from worker processes are forwarded to the main process for easy debugging.
+### 1.4: Install Local Helper Tools
+*   Our automation scripts need a couple of small Python libraries to work.
+*   In your terminal (inside the project folder), run:
+    ```bash
+    python -m pip install pyyaml paramiko
+    ```
 
 ---
 
-## 4  Retrieve Results (`remote/pull_outputs.py`)
+## Part 2: Setting Up Your Remote GPU Server
 
-Back on **local** machine:
+Now we'll rent a GPU server from a service called RunPod.
 
-```bash
-python remote/pull_outputs.py --pod runpod_gpu1
-```
+### 2.1: Create a RunPod Account
+*   Go to [runpod.io](https://runpod.io) and create an account. You will need to add some credits to rent a server.
 
-This performs an `rsync` over SSH:
+### 2.2: Generate an SSH Key
+*   **What it is:** An SSH key is like a very secure password that allows your computer to connect to the remote server without you typing a password each time.
+*   Open a terminal on your local machine and run the following command. Replace the email with your own.
+    ```bash
+    ssh-keygen -t ed25519 -C "your_email@example.com"
+    ```
+*   Press **Enter** three times to accept the default location and skip setting a passphrase.
+*   Now, view and copy your new key by running:
+    ```bash
+    cat ~/.ssh/id_ed25519.pub
+    ```
+    Select and copy the entire output, which starts with `ssh-ed25519` and ends with your email.
 
-* `~/MemoryCapacitorTopologies/training/outputs/` ➜ `training/outputs/` (local)
+### 2.3: Add Your SSH Key to RunPod
+*   In RunPod, go to **Settings -> SSH Keys**.
+*   Click **New Key**, give it a name (e.g., "My Laptop"), paste the key you just copied, and save it.
 
-The best network (`*.npz`) and any figures (`*.png`, `*.html`) will appear inside a sub-folder such as `training/outputs/lorenz_search_results/`.
+### 2.4: Deploy a GPU Pod
+*   Go to **Secure Cloud** and click **Deploy**.
+*   Select a powerful GPU like the **RTX A6000**.
+*   In the "Template" search bar, find and select **RunPod PyTorch 2**.
+*   Under "Customize Deployment," select your newly added SSH key.
+*   Click **Deploy**. After a minute, your pod will appear in the **My Pods** section with a green "Running" status.
 
----
-
-## 5  Run Final Validation Locally
-
-```bash
-python -m training.train --config configs/best_lorenz_config.yaml --plot
-```
-
-The command loads the saved `.npz`, re-trains (if desired), and writes fresh figures to the same output directory.
-
----
-
-## 6  Common Issues & Fixes
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `ModuleNotFoundError: yaml` on local pull | `pyyaml` not in your *local* env | `pip install pyyaml` or use the project’s conda env |
-| CUDA OOM on pod | Too many workers or large `n_nodes` | Reduce `--workers` or search space size |
-| Numerical instability (singular matrix) | ill-conditioned data | The code uses `torch.linalg.lstsq`; ensure `ridge_lam` includes non-zero values |
-
----
-
-## Quick Start
-
-```bash
-# local machine
-python remote/setup.py --pod runpod_gpu1  # one-time
-ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
-  source ~/miniforge3/etc/profile.d/conda.sh && \
-  conda activate rc && \
-  cd ~/MemoryCapacitorTopologies && \
-  python experiments/grid_search.py --config configs/lorenz_search.yaml --workers 8"
-
-# after it finishes
-python remote/pull_outputs.py --pod runpod_gpu1
-```
-
-Enjoy your accelerated hyper-parameter sweeps!  🎉
+### 2.5: Get Your Connection Details
+*   On the **My Pods** page, find your new pod and click the **Connect** button. A window will pop up showing you how to connect via SSH. It will look something like this:
+    `ssh root@157.157.221.29 -p 23202`
+*   Keep these details handy. You'll need the IP address (`157.157.221.29`) and the port (`23202`).
 
 ---
 
-## The Road to a Perfect Grid Search: A Step-by-Step History
+## Part 3: The Automated Workflow
 
-The final, perfected command you ran is the result of a detailed, iterative process of debugging and optimization. This section documents that journey, explaining the key problems we solved to get from a failing script to a fast, robust, and fully automated workflow.
+Now we'll connect everything and run the experiment.
 
-### The Perfected Command
+### 3.1: Configure the Connection File (`pods.yml`)
+*   This file tells our scripts how to find your remote server.
+*   Open `remote/pods.yml` in a text editor. Update the `uri`, `port`, and `key` to match your pod's details from step 2.5.
+    ```yaml
+    # ... (other settings)
+    pods:
+      gpu1:
+        uri: "root@157.157.221.29"  # <-- Your pod's IP address
+        port: 23202                  # <-- Your pod's port number
+        key: "~/.ssh/id_ed25519"      # <-- Should already be correct
+        role: gpu
+    ```
 
-```bash
-ssh -t -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
-  cd /root/MemoryCapacitorTopologies && \
-  /root/miniconda/envs/rc/bin/python -u experiments/grid_search.py --config configs/lorenz_search.yaml --workers 8"
-```
+### 3.2: Provision the Server (The Magic Step)
+*   This single command connects to your server and automatically sets up everything: Conda, Python, all dependencies, and the latest code from GitHub.
+*   On your **local machine**, run:
+    ```bash
+    python remote/setup.py
+    ```
+*   This will take several minutes. Be patient! It's finished when you see the message: `[✔] gpu1 ready`.
 
-Here’s how we made every part of that command work perfectly:
+### 3.3: Launch the Grid Search
+*   Now for the main event! This command starts the experiment on the remote server, using the robust settings we discovered to ensure true parallelism.
+*   On your **local machine**, run the `ssh` command from step 2.5, but add the experiment command at the end. **Make sure to replace the user, IP, and port with your own.**
+    ```bash
+    ssh -t -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "cd /root/MemoryCapacitorTopologies && OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 /root/miniconda/envs/rc/bin/python -u experiments/grid_search.py configs/lorenz_search.yaml"
+    ```
+*   You will see a real-time stream of `[✔] FINISHED` messages as the jobs complete. This will run for a while.
 
-### Step 1: Solving Instability and Crashes
+> **⚠️ Important Note on the SSH Command:**
+> The `ssh` command in step 3.3 is very long. When you copy it, make sure you replace **only** the user, IP address, and port number with your own details. The rest of the command, especially the part in quotes, must be copied exactly as it is.
 
-*   **Problem:** The initial grid search was unstable. It frequently crashed due to `TypeError` and `singular matrix` errors in PyTorch.
-*   **Investigation:** We added detailed logging to the `_ridge_regression` function. The logs revealed two root causes:
-    1.  The regularization parameter, `lam`, was being read from the YAML config as a string (e.g., `'1e-5'`) instead of a `float`, causing a `TypeError`.
-    2.  For some hyper-parameters, `torch.linalg.solve` was failing on ill-conditioned matrices.
-*   **Solution:**
-    1.  We added an explicit `float()` cast to the `lam` parameter inside the training script.
-    2.  We replaced the sensitive `torch.linalg.solve` with the more numerically stable `torch.linalg.lstsq`, which gracefully handles these edge cases.
+### 3.4: Retrieve Your Results
+*   Once the grid search is done, all results are on the remote server. Let's download them.
+*   On your **local machine**, run:
+    ```bash
+    python remote/pull_outputs.py
+    ```
+*   This copies the `training/outputs/` directory from the remote server to your local project folder.
 
-### Step 2: Achieving True Parallelism
+### 3.5: Analyze the Interactive Plot
+*   The results are now on your computer!
+*   Navigate to `training/outputs/lorenz_search_results/`.
+*   Find and double-click `lorenz_predictions_3d.html` to open it in your browser.
+*   You can now explore the 3D plot of the Lorenz attractor your model predicted!
 
-*   **Problem:** Even when the script ran, it wasn't significantly faster with more workers. The CPU was thrashing, with processes competing for resources instead of running in parallel.
-*   **Investigation:** This is a classic PyTorch multiprocessing issue. By default, PyTorch tries to use multiple threads per process, which leads to massive overhead when you're also using multiple processes.
-*   **Solution:** We added `torch.set_num_threads(1)` at the beginning of each worker's execution. This forces each of the 8 worker processes onto a single CPU core, eliminating thread contention and enabling true, efficient parallelism.
+---
 
-### Step 3: Enabling Real-Time Debugging
+## Part 4: Troubleshooting & FAQ
 
-*   **Problem:** It was impossible to debug on the remote pod because `print` statements and logs would only appear after the entire script finished. This was caused by Python's default output buffering.
-*   **Investigation:** We found that using `conda run` was a primary cause of the buffering.
-*   **Solution:** The perfected command bypasses `conda run` and invokes the Python interpreter directly from the conda environment's `bin` path. We also added the `-u` flag to ensure unbuffered output.
-    *   **This is the key to the command:** `/root/miniconda/envs/rc/bin/python -u ...` ensures every `print` statement and log message appears on your local terminal in real-time.
+*   **Error: `Permission denied (publickey)`**
+    *   **Cause:** Your SSH key isn't set up correctly in RunPod, or `pods.yml` is pointing to the wrong key file.
+    *   **Solution:** Go back to steps 2.2 and 2.3. Ensure you've copied the *entire* public key into RunPod. Verify the `key` path in `pods.yml` is `~/.ssh/id_ed25519`.
 
-### Step 4: Adding Early Stopping (Your Contribution!)
+*   **Error: `Connection timed out` when running `setup.py`**
+    *   **Cause:** Your pod is not running, or the `uri`/`port` in `pods.yml` is incorrect.
+    *   **Solution:** Go to the **My Pods** page on RunPod and make sure your pod has a green "Running" status. Double-check that the IP and port in `pods.yml` match the connection details exactly.
 
-*   **Problem:** The grid search would always run through all 432 combinations, even if a great result was found early on.
-*   **Solution:** You implemented an elegant early-stopping mechanism. By adding a `target_mse` to the config, the script now monitors the best validation score and automatically cancels all remaining jobs once the target is met, saving significant time and compute cost.
+*   **The grid search runs very slowly or seems to hang.**
+    *   **Cause:** You forgot to include the `OMP_NUM_THREADS=1 ...` part of the command in step 3.3.
+    *   **Solution:** This part is critical! It prevents your CPU cores from fighting each other. Copy the command from step 3.3 exactly as written.
 
-By systematically identifying and fixing these issues, we transformed the grid search from a broken, slow, and opaque script into the highly optimized, robust, and transparent workflow you have today.
+*   **Error: `No such file or directory` when running `pull_outputs.py`**
+    *   **Cause:** The grid search either failed or didn't finish.
+    *   **Solution:** Re-run the command from step 3.3 and wait for it to print "--- Grid Search Complete ---" before trying to pull the results.
+
+---
+
+## Part 5: Shutting Down Your Server (To Save Money!)
+
+Once you have successfully downloaded your results, it is **very important** to shut down your remote server so you don't continue to be charged for it.
+
+1.  Go to the **My Pods** page on RunPod.
+2.  Find your pod, click the three-dots menu icon.
+3.  Select **Terminate Pod**.
+
+This will permanently delete the server and stop all charges.

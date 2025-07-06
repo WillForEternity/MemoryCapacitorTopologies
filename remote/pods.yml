@@ -1,11 +1,10 @@
-# Inventory for RunPod automation
-repo: https://github.com/WillForEternity/MemoryCapacitorTopologies.git
 branch: main
-python: 3.10
 conda_env: rc
 pods:
   gpu1:
-    uri: "root@157.157.221.29"
+    key: /Users/willnorden/.ssh/id_ed25519
     port: 23202
-    key: "~/.ssh/id_ed25519"
     role: gpu
+    uri: root@157.157.221.29
+python: '3.10'
+repo: https://github.com/WillForEternity/MemoryCapacitorTopologies.git

@@ -90,13 +90,13 @@ config = eval(npz["config"].item())  # or use json/pickle for safer loading
 ---
 
 ## Automated GPU Grid Search & Remote Execution  
-*(See [`remote/REMOTE_GRID_SEARCH.md`](remote/REMOTE_GRID_SEARCH.md) for a step-by-step guide, and [`remote/REMOTE_WORKFLOW_EVOLUTION.md`](remote/REMOTE_WORKFLOW_EVOLUTION.md) for the full story of how we optimized it.)*
-
-The entire hyper-parameter search is driven by a single, generic script:
+To run a fully automated, parallelized grid search on a remote GPU server (like RunPod), use our new interactive orchestrator script. This script handles everything from server setup to downloading results.
 
 ```bash
-python experiments/grid_search.py --config configs/lorenz_search.yaml --workers 8
+python remote/run_remote_experiment.py
 ```
+
+For a detailed, manual walkthrough of the process, see the guide at [`remote/REMOTE_GRID_SEARCH.md`](remote/REMOTE_GRID_SEARCH.md).
 
 Key features:
 

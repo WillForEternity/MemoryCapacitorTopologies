@@ -1,0 +1,36 @@
+# Broad random/grid search aimed at reaching <10 MSE on Lorenz predictions.
+
+base_config:
+  dataset:
+    name: "lorenz"
+    params:
+      length: 6000
+      split: 0.6
+  reservoir_bundle:
+    topology:
+      name: "small_world"
+      params:
+        k: 6
+        beta: 0.2  # rewiring probability
+    reservoir:
+      mode: "single"
+      input_dim: 3
+      device: "cuda"  # override on CPU-only machines
+  washout: 150
+  val_ratio: 0.2
+
+# Hyper-parameter space — purposely wide. The script explores the Cartesian
+# product, so keep the list lengths reasonable for local runs or set workers
+# large when using a GPU pod.
+param_grid:
+  reservoir_bundle.topology.params.n_nodes: [256, 512, 768, 1024, 1536, 2048]
+  reservoir_bundle.reservoir.input_scale: [0.3, 0.6, 1.0, 1.5, 2.0]
+  reservoir_bundle.reservoir.spectral_radius: [0.6, 0.8, 0.9, 1.0, 1.1, 1.3]
+  reservoir_bundle.reservoir.random_seed: [0, 1, 2, 3]
+  ridge_lam: [1e-2, 1e-3, 1e-4, 1e-5]
+
+search_options:
+  workers: 16            # tune based on CPU cores on the pod
+  target_mse: 10.0       # early-stop threshold implemented in grid_search.py
+  save_best: "best_lorenz.npz"
+  plot_best: true
