@@ -186,8 +186,9 @@ def main():
         "ssh", "-t", # Force TTY allocation
         "-i", os.path.expanduser(user_input['key_path']),
         "-p", ssh_details['port'], ssh_details['uri'],
-        # Wrap in bash -c for robustness
-        "bash -c \"pkill -f 'grid_search.py' || true; echo 'Remote processes cleaned.'\""
+        # Wrap in bash -c for robustness and add a sleep to prevent the server
+        # from terminating an extremely short-lived session with an error.
+        "bash -c \"pkill -f 'grid_search.py' || true; echo 'Remote processes cleaned.'; sleep 1\""
     ]
     if not run_command(kill_command, "Cleaning Remote Processes", interactive=True):
         sys.exit(1)
