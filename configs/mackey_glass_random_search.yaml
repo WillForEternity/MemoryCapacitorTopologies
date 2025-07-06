@@ -1,0 +1,40 @@
+# Broad random/grid search aimed at reaching <0.01 MSE on Mackey-Glass predictions.
+
+base_config:
+  dataset:
+    name: "mackey_glass"
+    params:
+      length: 6000
+      split: 0.6
+      tau: 17
+      n: 10
+      beta: 0.2
+      gamma: 0.1
+  reservoir_bundle:
+    topology:
+      name: "small_world"
+      params:
+        k: 6
+        beta: 0.2  # rewiring probability
+    reservoir:
+      mode: "single"
+      input_dim: 1 # Mackey-Glass is a 1D time series
+      device: "cuda"  # override on CPU-only machines
+  washout: 150
+  val_ratio: 0.2
+
+# Hyper-parameter space — purposely wide. The script explores the Cartesian
+# product, so keep the list lengths reasonable for local runs or set workers
+# large when using a GPU pod.
+param_grid:
+  reservoir_bundle.topology.params.n_nodes: [50, 100, 256, 512, 1024, 2048]
+  reservoir_bundle.reservoir.input_scale: [0.6, 0.4, 0.2, 0.1, 0.05]
+  reservoir_bundle.reservoir.spectral_radius: [1.0, 0.95, 0.9, 0.8, 0.7, 0.6]
+  reservoir_bundle.reservoir.random_seed: [0, 1, 2, 3]
+  ridge_lam: [1e-4, 1e-3, 1e-2, 1e-1]
+
+search_options:
+  workers: 16            # tune based on CPU cores on the pod
+  target_mse: 0.01      # early-stop threshold implemented in grid_search.py
+  save_best: "best_mackey_glass.npz"
+  plot_best: true
