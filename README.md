@@ -9,14 +9,36 @@ This project provides a comprehensive, extensible, and user-friendly framework f
 ```
 .
 ├── configs/
+│   ├── best_lorenz_config.yaml
+│   └── lorenz_random_search.yaml
 ├── datasets/
+│   ├── lorenz/
+│   │   ├── __init__.py
+│   │   ├── generator.py
+│   │   └── reporting.py
+│   └── mackey_glass/
+│       ├── __init__.py
+│       ├── generator.py
+│       └── reporting.py
 ├── experiments/
+│   └── grid_search.py
 ├── models/
+│   └── memcapacitor.py
 ├── networks/
+│   ├── reservoir.py
 │   └── topologies/
+│       ├── small_world.py
+│       └── random.py
 ├── remote/
+│   ├── run_remote_experiment.py
+│   ├── run_remote_experiment.md
+│   ├── setup.py
+│   └── pods.yml
 ├── tests/
+│   ├── test_memcapacitor_verbose.py
+│   └── ...
 ├── training/
+│   ├── train.py
 │   └── outputs/
 ├── .gitignore
 ├── README.md
