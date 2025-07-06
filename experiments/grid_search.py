@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import yaml
+from tqdm import tqdm
 import torch
 import traceback
 import io
@@ -74,11 +75,10 @@ def _run_single(cfg: Dict[str, Any]) -> Dict[str, Any]:
         sr = cfg['reservoir_bundle']['reservoir']['spectral_radius']
         lam = cfg['ridge_lam']
         seed = cfg['reservoir_bundle']['reservoir']['random_seed']
-        run_id = f"n_nodes={n_nodes}, sr={sr}, lam={lam}, seed={seed}"
-        print(f"[Worker] STARTING: {run_id}", flush=True)
+        # Logging is now handled by the main process with a progress bar.
     except KeyError:
         # Fallback if the config structure is unexpected
-        print("[Worker] STARTING a new run...", flush=True)
+        pass
 
     # Suppress verbose output from individual runs during grid search
     cfg["verbose"] = False
@@ -126,37 +126,28 @@ def run_grid(config_path: str):
         future_to_cfg = {executor.submit(_run_single, cfg): cfg for cfg in run_configs}
         print("All jobs submitted. Waiting for results...", flush=True)
 
-        for i, future in enumerate(concurrent.futures.as_completed(future_to_cfg)):
-            # Retrieve the original config to identify the run's parameters
-            original_cfg = future_to_cfg[future]
+        # Use tqdm for a clean progress bar
+        pbar = tqdm(concurrent.futures.as_completed(future_to_cfg), total=len(run_configs), desc="Grid Search")
+        for future in pbar:
             try:
                 metrics = future.result()
                 val_mse = metrics["val_mse"]
 
-                # Create a human-readable identifier for the run's parameters for logging
-                run_params = {}
-                for key in param_grid.keys():
-                    # Traverse the nested dict to get the value for the current param
-                    value = original_cfg
-                    for p in key.split('.'):
-                        value = value[p]
-                    run_params[key.split('.')[-1]] = value
-                run_params_str = ', '.join([f"{k}={v}" for k, v in run_params.items()])
-
-                val_mse_str = f"{val_mse:.4f}" if val_mse is not None else "N/A"
-                print(f"({i+1}/{len(param_combos)}) [✔] FINISHED -> val_mse={val_mse_str} | {run_params_str}", flush=True)
-
                 if val_mse < best_val_mse:
                     best_val_mse = val_mse
                     best_metrics = metrics
+                    # Update progress bar with the best MSE found so far
+                    pbar.set_postfix(best_mse=f"{best_val_mse:.4f}")
+
                     # Early stop if target reached
                     if target_mse is not None and best_val_mse < target_mse:
-                        print(f"[✓] Target MSE {target_mse} reached (val_mse={best_val_mse:.4f}). Cancelling remaining jobs…", flush=True)
+                        pbar.write(f"[✓] Target MSE {target_mse} reached (val_mse={best_val_mse:.4f}). Cancelling remaining jobs…", file=sys.stdout)
                         for fut in future_to_cfg.keys():
                             fut.cancel()
                         break
             except Exception as exc:
-                print(f"({i+1}/{len(param_combos)}) [✘] FAILED -> {exc}", flush=True)
+                # Log errors to the tqdm console to avoid breaking the progress bar
+                pbar.write(f"[✘] A run failed: {exc}", file=sys.stderr)
 
     if best_metrics is None:
         print("\n[✘] No runs completed successfully!", flush=True)
