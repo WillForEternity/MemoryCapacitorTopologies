@@ -127,13 +127,13 @@ def main():
     if not args.no_sync:
         commit_message = f"Auto-sync before experiment run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         if not run_command(['git', 'add', '.'], "Staging Changes"):
-            return
+            sys.exit(1)
         # Only commit if there are staged changes
         if subprocess.run(['git', 'diff', '--staged', '--quiet']).returncode != 0:
             if not run_command(['git', 'commit', '-m', commit_message], "Committing Changes"):
-                return
+                sys.exit(1)
             if not run_command(['git', 'push'], "Pushing to Remote"):
-                return
+                sys.exit(1)
         else:
             print_color("\n[INFO] No changes to commit. Skipping sync.", "blue")
     else:
@@ -143,28 +143,29 @@ def main():
     user_input = get_user_input(args)
     if not all(user_input.values()):
         print_color("[✖] All inputs are required. Exiting.", "red")
-        return
+        sys.exit(1)
 
     ssh_details = parse_ssh_string(user_input['ssh_string'])
     if not ssh_details:
-        return
+        sys.exit(1)
     
     if not update_pods_yaml(ssh_details['uri'], ssh_details['port'], user_input['key_path']):
-        return
+        sys.exit(1)
 
     # --- Step 2: Kill Lingering Remote Processes ---
     kill_command = [
         "ssh", "-i", os.path.expanduser(user_input['key_path']),
         "-p", ssh_details['port'], ssh_details['uri'],
-        "pkill -f 'grid_search.py' || true"  # '|| true' prevents exit if no process found
+        # Wrap in bash -c for robustness
+        "bash -c \"pkill -f 'grid_search.py' || true\""
     ]
     if not run_command(kill_command, "Cleaning Remote Processes"):
-        return
+        sys.exit(1)
 
     # --- Step 3: Provision the Remote Server ---
     if not run_command(['python', 'remote/setup.py'], "Provisioning Server", prefix_output=False):
         print_color("[✖] Failed to provision the remote server. Please check the logs.", "red")
-        return
+        sys.exit(1)
 
     # --- Step 4: Launch the Grid Search (Interactive) ---
     ssh_command = [
@@ -180,12 +181,12 @@ def main():
     ]
     if not run_command(ssh_command, "Launching Grid Search", interactive=True):
         print_color("[✖] Grid search failed. Please check the logs.", "red")
-        return
+        sys.exit(1)
 
     # --- Step 5: Retrieve Results ---
     if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results", prefix_output=False):
         print_color("[✖] Failed to retrieve results. You may need to run 'python remote/pull_outputs.py' manually.", "red")
-        return
+        sys.exit(1)
     
     print_color("\n--- All Steps Complete! ---", "green")
     print_color("Your experiment results have been downloaded to the 'training/outputs' directory.", "blue")
