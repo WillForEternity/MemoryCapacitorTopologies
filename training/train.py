@@ -151,8 +151,8 @@ def run(cfg: Dict[str, Any]):
             ax.set_title('Lorenz trajectory – target (line) vs pred (dots)')
             ax.legend()
         else:
-            y_pred_np = y_pred.detach().cpu().numpy().squeeze()
-            y_true_np = y_true.detach().cpu().numpy().squeeze()
+            y_pred_np = y_pred.detach().cpu().numpy().ravel()
+            y_true_np = y_true.detach().cpu().numpy().ravel()
             t = np.arange(len(y_true_np))
 
             fig, ax = plt.subplots(figsize=(8, 3))
