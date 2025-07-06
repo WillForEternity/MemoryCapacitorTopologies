@@ -20,7 +20,7 @@ This project provides a comprehensive, extensible, and user-friendly framework f
 ## Project Structure
 
 ```
-.
+. 
 ├── configs/
 │   ├── best_lorenz_config.yaml
 │   └── lorenz_random_search.yaml
