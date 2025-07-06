@@ -151,17 +151,20 @@ def run(cfg: Dict[str, Any]):
             ax.set_title('Lorenz trajectory – target (line) vs pred (dots)')
             ax.legend()
         else:
-            t = np.arange(len(y_pred))
+            y_pred_np = y_pred.detach().cpu().numpy().squeeze()
+            y_true_np = y_true.detach().cpu().numpy().squeeze()
+            t = np.arange(len(y_true_np))
+
             fig, ax = plt.subplots(figsize=(8, 3))
             sc = ax.scatter(
                 t,
-                y_pred.detach().cpu().numpy(),
-                c=y_pred.detach().cpu().numpy(),
+                y_pred_np,
+                c=y_pred_np,
                 cmap="jet",
                 s=8,
                 label="pred",
             )
-            ax.plot(t, y_true.cpu().numpy(), color="black", linewidth=1, label="target")
+            ax.plot(t, y_true_np, color="black", linewidth=1, label="target")
             ax.set_title(f"Prediction – {ds_cfg['name']}")
             ax.legend()
             fig.colorbar(sc, ax=ax, label="pred amplitude")
