@@ -1,5 +1,6 @@
 import argparse
 import os
+import pty
 import re
 import subprocess
 import sys
@@ -21,34 +22,31 @@ def print_color(text, color):
     sys.stdout.write(colors.get(color, "") + text + colors["end"] + "\n")
     sys.stdout.flush()
 
-def run_command(command, step_name):
-    """Runs a command as a subprocess and streams its output."""
+def run_command(command, step_name, interactive=False):
+    """Runs a command, streaming its output. For interactive commands, uses a PTY."""
     print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        
-        prefix = f"[{step_name}] | "
-        prefixing_active = True
-        is_grid_search_step = (step_name == "Launching Grid Search")
-
-        for line in iter(process.stdout.readline, ''):
-            # For grid search, stop prefixing when the progress bar starts to keep it static
-            if is_grid_search_step and "--- TQDM PROGRESS START ---" in line:
-                prefixing_active = False
-                continue  # Don't print the sentinel line itself
-
-            if prefixing_active:
+        if interactive:
+            # Use pty.spawn for commands that require a real TTY (like tqdm)
+            # This will connect the subprocess directly to the user's terminal
+            return_code = pty.spawn(command)
+            if return_code != 0:
+                print_color(f"\n[✖] Command failed with exit code {return_code}.", "red")
+                return False
+        else:
+            # Use subprocess.Popen for standard, non-interactive commands
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            prefix = f"[{step_name}] | "
+            for line in iter(process.stdout.readline, ''):
                 sys.stdout.write(f"{prefix}{line.rstrip()}\n")
-            else:
-                sys.stdout.write(line)  # Pass through raw output for tqdm
-            sys.stdout.flush()
-        
-        process.stdout.close()
-        rc = process.wait()
-        if rc != 0:
-            print_color(f"[✖] Command failed with exit code {rc}.", "red")
-            return False
-        
+                sys.stdout.flush()
+            
+            process.stdout.close()
+            rc = process.wait()
+            if rc != 0:
+                print_color(f"[✖] Command failed with exit code {rc}.", "red")
+                return False
+
         print_color(f"[✔] Step completed successfully.", "green")
         return True
     except Exception as e:
@@ -138,19 +136,17 @@ def main():
 
     # --- Step 4: Launch the Grid Search ---
     ssh_command = [
-        "ssh", # Removed -t to prevent pseudo-terminal allocation issues with tqdm
+        "ssh", "-t",  # Force TTY allocation for interactive tqdm rendering
         "-i", os.path.expanduser(user_input['key_path']),
         "-p", ssh_details['port'],
         ssh_details['uri'],
         (
-            f"script -q -c '" \
-            f"cd /root/MemoryCapacitorTopologies && " \
-            f"OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 " \
-            f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}" \
-            f"' /dev/null"
+            f"cd /root/MemoryCapacitorTopologies && "
+            f"OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 "
+            f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}"
         )
     ]
-    if not run_command(ssh_command, "Launching Grid Search"):
+    if not run_command(ssh_command, "Launching Grid Search", interactive=True):
         print_color("[✖] Grid search failed. Please check the logs.", "red")
         return
 
