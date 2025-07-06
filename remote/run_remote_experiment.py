@@ -21,15 +21,18 @@ def print_color(text, color):
     sys.stdout.write(colors.get(color, "") + text + colors["end"] + "\n")
     sys.stdout.flush()
 
-def run_command(command, step_name):
+def run_command(command, step_name, prefix_output=True):
     """Runs a command as a subprocess and streams its output."""
-    print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
+    print_color(f"\n[STEP {step_name}] Running...", "yellow")
     try:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         prefix = f"[{step_name}] | "
         for line in iter(process.stdout.readline, ''):
             # rstrip to remove trailing newline from subprocess, then add our own
-            sys.stdout.write(f"{prefix}{line.rstrip()}\n")
+            if prefix_output:
+                sys.stdout.write(f"{prefix}{line.rstrip()}\n")
+            else:
+                sys.stdout.write(line)
             sys.stdout.flush()
         
         process.stdout.close()
@@ -137,7 +140,7 @@ def main():
             f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}"
         )
     ]
-    if not run_command(ssh_command, "Launching Grid Search"):
+    if not run_command(ssh_command, "Launching Grid Search", prefix_output=False):
         print_color("[✖] Grid search failed. Please check the logs.", "red")
         return
 
