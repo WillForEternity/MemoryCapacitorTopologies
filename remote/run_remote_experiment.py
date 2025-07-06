@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import yaml
+from datetime import datetime
 
 # --- Helpers ---
 
@@ -22,24 +23,30 @@ def print_color(text, color):
     sys.stdout.write(colors.get(color, "") + text + colors["end"] + "\n")
     sys.stdout.flush()
 
-def run_command(command, step_name, interactive=False):
-    """Runs a command, streaming its output. For interactive commands, uses a PTY."""
+def run_command(command, step_name, interactive=False, prefix_output=True):
+    """Runs a command, streaming output. For interactive commands, uses a PTY."""
     print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
     try:
         if interactive:
-            # Use pty.spawn for commands that require a real TTY (like tqdm)
-            # This will connect the subprocess directly to the user's terminal
+            # Use pty.spawn for commands that require a real TTY (like tqdm).
+            # This directly connects the subprocess to our terminal, which is the
+            # key to making the progress bar render correctly in-place.
             return_code = pty.spawn(command)
             if return_code != 0:
                 print_color(f"\n[✖] Command failed with exit code {return_code}.", "red")
                 return False
         else:
-            # Use subprocess.Popen for standard, non-interactive commands
+            # Use subprocess.Popen for standard, non-interactive commands.
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-            prefix = f"[{step_name}] | "
-            for line in iter(process.stdout.readline, ''):
-                sys.stdout.write(f"{prefix}{line.rstrip()}\n")
-                sys.stdout.flush()
+            if prefix_output:
+                prefix = f"[{step_name}] | "
+                for line in iter(process.stdout.readline, ''):
+                    sys.stdout.write(f"{prefix}{line.rstrip()}\n")
+                    sys.stdout.flush()
+            else: # Stream raw output, for scripts that have their own formatting
+                for line in iter(process.stdout.readline, ''):
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
             
             process.stdout.close()
             rc = process.wait()
@@ -109,19 +116,35 @@ def update_pods_yaml(uri, port, key_path):
 # --- Main Orchestrator ---
 
 def main():
-    parser = argparse.ArgumentParser(description="Automated Remote Grid Search Orchestrator.")
-    parser.add_argument('--ssh-string', type=str, help="Full SSH connection string from RunPod (e.g., 'root@1.2.3.4 -p 12345').")
+    parser = argparse.ArgumentParser(description="Fully Automated Remote Grid Search Orchestrator.")
+    parser.add_argument('--ssh-string', type=str, help="Full SSH connection string from RunPod.")
     parser.add_argument('--key-path', type=str, help="Full path to your SSH private key.")
     parser.add_argument('--config', type=str, help="Path to the grid search YAML config file.")
+    parser.add_argument('--no-sync', action='store_true', help="Skip the automatic git add, commit, and push.")
     args = parser.parse_args()
 
-    # --- Step 1: Get User Input ---
+    # --- Step 0: Git Sync ---
+    if not args.no_sync:
+        commit_message = f"Auto-sync before experiment run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        if not run_command(['git', 'add', '.'], "Staging Changes"):
+            return
+        # Only commit if there are staged changes
+        if subprocess.run(['git', 'diff', '--staged', '--quiet']).returncode != 0:
+            if not run_command(['git', 'commit', '-m', commit_message], "Committing Changes"):
+                return
+            if not run_command(['git', 'push'], "Pushing to Remote"):
+                return
+        else:
+            print_color("\n[INFO] No changes to commit. Skipping sync.", "blue")
+    else:
+        print_color("\n[INFO] Skipping Git sync as requested.", "blue")
+
+    # --- Step 1: Get User Input & Configure ---
     user_input = get_user_input(args)
     if not all(user_input.values()):
         print_color("[✖] All inputs are required. Exiting.", "red")
         return
 
-    # --- Step 2: Configure pods.yml ---
     ssh_details = parse_ssh_string(user_input['ssh_string'])
     if not ssh_details:
         return
@@ -129,12 +152,21 @@ def main():
     if not update_pods_yaml(ssh_details['uri'], ssh_details['port'], user_input['key_path']):
         return
 
+    # --- Step 2: Kill Lingering Remote Processes ---
+    kill_command = [
+        "ssh", "-i", os.path.expanduser(user_input['key_path']),
+        "-p", ssh_details['port'], ssh_details['uri'],
+        "pkill -f 'grid_search.py' || true"  # '|| true' prevents exit if no process found
+    ]
+    if not run_command(kill_command, "Cleaning Remote Processes"):
+        return
+
     # --- Step 3: Provision the Remote Server ---
-    if not run_command(['python', 'remote/setup.py'], "Provisioning Server"):
+    if not run_command(['python', 'remote/setup.py'], "Provisioning Server", prefix_output=False):
         print_color("[✖] Failed to provision the remote server. Please check the logs.", "red")
         return
 
-    # --- Step 4: Launch the Grid Search ---
+    # --- Step 4: Launch the Grid Search (Interactive) ---
     ssh_command = [
         "ssh", "-t",  # Force TTY allocation for interactive tqdm rendering
         "-i", os.path.expanduser(user_input['key_path']),
@@ -151,7 +183,7 @@ def main():
         return
 
     # --- Step 5: Retrieve Results ---
-    if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results"):
+    if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results", prefix_output=False):
         print_color("[✖] Failed to retrieve results. You may need to run 'python remote/pull_outputs.py' manually.", "red")
         return
     
