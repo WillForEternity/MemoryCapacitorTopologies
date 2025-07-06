@@ -107,6 +107,8 @@ def run_grid(config_path: str):
     keys, values = zip(*param_grid.items())
     param_combos = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
+    print(f"Launching grid search with {len(param_combos)} combinations...", flush=True)
+
     # Create a list of full configuration dictionaries for the pool
     run_configs = []
     for combo in param_combos:
@@ -120,7 +122,13 @@ def run_grid(config_path: str):
     target_mse = search_opts.get("target_mse")
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=search_opts.get("workers", 4)) as executor:
+        print(f"Submitting {len(run_configs)} jobs to the process pool ({search_opts.get('workers', 4)} workers)...", flush=True)
         future_to_cfg = {executor.submit(_run_single, cfg): cfg for cfg in run_configs}
+        print("All jobs submitted. Waiting for results...", flush=True)
+
+        # Sentinel to signal orchestrator to stop prefixing output
+        print("--- TQDM PROGRESS START ---", flush=True)
+
 
         # Use tqdm for a clean progress bar
         pbar = tqdm(concurrent.futures.as_completed(future_to_cfg), total=len(run_configs), desc="Grid Search")

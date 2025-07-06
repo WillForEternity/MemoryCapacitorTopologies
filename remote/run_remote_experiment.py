@@ -21,18 +21,26 @@ def print_color(text, color):
     sys.stdout.write(colors.get(color, "") + text + colors["end"] + "\n")
     sys.stdout.flush()
 
-def run_command(command, step_name, prefix_output=True):
+def run_command(command, step_name):
     """Runs a command as a subprocess and streams its output."""
-    print_color(f"\n[STEP {step_name}] Running...", "yellow")
+    print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
     try:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        
         prefix = f"[{step_name}] | "
+        prefixing_active = True
+        is_grid_search_step = (step_name == "Launching Grid Search")
+
         for line in iter(process.stdout.readline, ''):
-            # rstrip to remove trailing newline from subprocess, then add our own
-            if prefix_output:
+            # For grid search, stop prefixing when the progress bar starts to keep it static
+            if is_grid_search_step and "--- TQDM PROGRESS START ---" in line:
+                prefixing_active = False
+                continue  # Don't print the sentinel line itself
+
+            if prefixing_active:
                 sys.stdout.write(f"{prefix}{line.rstrip()}\n")
             else:
-                sys.stdout.write(line)
+                sys.stdout.write(line)  # Pass through raw output for tqdm
             sys.stdout.flush()
         
         process.stdout.close()
@@ -140,7 +148,7 @@ def main():
             f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}"
         )
     ]
-    if not run_command(ssh_command, "Launching Grid Search", prefix_output=False):
+    if not run_command(ssh_command, "Launching Grid Search"):
         print_color("[✖] Grid search failed. Please check the logs.", "red")
         return
 
