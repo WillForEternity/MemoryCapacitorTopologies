@@ -4,6 +4,19 @@ This project provides a comprehensive, extensible, and user-friendly framework f
 
 ---
 
+## Table of Contents
+
+1.  [Project Structure](#project-structure)
+2.  [Getting Started](#getting-started)
+3.  [Running Experiments](#running-experiments)
+    *   [Local Training](#local-training-example)
+    *   [Automated Remote Grid Search](#automated-remote-gpu-grid-search)
+4.  [Extensibility](#extensibility)
+5.  [Project Philosophy](#design-philosophy-human-and-ai-readability)
+6.  [Scientific Best Practices](#reproducibility--scientific-best-practices)
+
+---
+
 ## Project Structure
 
 ```
@@ -55,19 +68,6 @@ This project provides a comprehensive, extensible, and user-friendly framework f
 *   `tests/`: A suite of verbose, behavioral tests that produce human-readable output and diagnostic plots to verify the correctness of each component.
 *   `training/`: Contains the core training pipeline (`train.py`), which can be run standalone or as part of a grid search.
     *   `outputs/`: The default directory where all training artifacts (plots, logs, and saved models) are stored.
-
----
-
-## Table of Contents
-
-1.  [Project Structure](#project-structure)
-2.  [Getting Started](#getting-started)
-3.  [Running Experiments](#running-experiments)
-    *   [Local Training](#local-training-example)
-    *   [Automated Remote Grid Search](#automated-remote-gpu-grid-search)
-4.  [Extensibility](#extensibility)
-5.  [Project Philosophy](#design-philosophy-human-and-ai-readability)
-6.  [Scientific Best Practices](#reproducibility--scientific-best-practices)
 
 ---
 
