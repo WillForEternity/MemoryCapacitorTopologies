@@ -116,13 +116,22 @@ def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event)
         time.sleep(0.5)
 
 
-def run_grid(config_path: str):
+def run_grid(config_path: str, n_nodes: int | None = None, save_path_override: str | None = None):
     """Main grid search execution function."""
     with open(config_path) as f:
         search_spec = yaml.safe_load(f)
 
     base_cfg = search_spec["base_config"]
     param_grid = search_spec["param_grid"]
+
+    # If n_nodes is provided as an argument, override the config.
+    if n_nodes is not None:
+        # Remove from grid search if it's there to avoid conflict
+        if 'reservoir_bundle.topology.params.n_nodes' in param_grid:
+            print(f"[INFO] --n-nodes provided, removing from param_grid.")
+            del param_grid['reservoir_bundle.topology.params.n_nodes']
+        # Set it in the base config for all runs in this process
+        set_nested(base_cfg, 'reservoir_bundle.topology.params.n_nodes', n_nodes)
     search_opts = search_spec["search_options"]
     num_workers = search_opts.get("workers", 4)
 
@@ -173,8 +182,8 @@ def run_grid(config_path: str):
                             print(f"\n[✓] Target MSE {target_mse} reached (val_mse={best_val_mse_ref.value:.4f}). Signalling workers to stop…")
                             stop_early_event.set()
                 except Exception as exc:
-                    # Print errors immediately for better debugging
-                    print(f"\n[!] Worker failed with an exception: {exc}", flush=True)
+                    # Errors will be printed to the main console after the display loop finishes
+                    pass
     finally:
         stop_display_event.set()
         display_thread.join()
@@ -197,7 +206,8 @@ def run_grid(config_path: str):
         else:
             print(f'    {key}: {value}', flush=True)
 
-    if (save_path := search_opts.get("save_best")):
+    save_path = save_path_override or search_opts.get("save_best")
+    if save_path:
         _save_best(save_path, best_metrics)
 
     if search_opts.get("plot_best", False):
@@ -217,5 +227,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run a generic grid search from a YAML config.")
     parser.add_argument("config", help="Path to the search configuration YAML file.")
+    parser.add_argument("--n-nodes", type=int, default=None, help="Override the number of nodes in the reservoir topology.")
+    parser.add_argument("--save-path", type=str, default=None, help="Override the path to save the best model.")
     args = parser.parse_args()
-    run_grid(args.config)
+    run_grid(args.config, n_nodes=args.n_nodes, save_path_override=args.save_path)

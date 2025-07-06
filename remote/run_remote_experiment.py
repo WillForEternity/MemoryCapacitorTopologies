@@ -148,6 +148,9 @@ def update_pods_yaml(uri, port, key_path):
 # --- Main Orchestrator ---
 
 def main():
+    # Define the neuron counts for the outer loop
+    neuron_counts = [25, 50, 100]
+
     parser = argparse.ArgumentParser(description="Automated Remote Grid Search Orchestrator.")
     parser.add_argument('--ssh-string', type=str, default=None, help="Full SSH connection string from RunPod (e.g., 'root@1.2.3.4 -p 12345').")
     parser.add_argument('--key-path', type=str, default=None, help="Full path to your SSH private key.")
@@ -173,21 +176,33 @@ def main():
         print_color("[✖] Failed to provision the remote server. Please check the logs.", "red")
         return
 
-    # --- Step 4: Launch the Grid Search ---
-    ssh_command = [
-        "ssh", "-t",  # Force TTY allocation for interactive tqdm rendering
-        "-i", os.path.expanduser(user_input['key_path']),
-        "-p", ssh_details['port'],
-        ssh_details['uri'],
-        (
-            f"cd /root/MemoryCapacitorTopologies && "
-            f"OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 "
-            f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}"
-        )
-    ]
-    if not run_command(ssh_command, "Launching Grid Search"):
-        print_color("[✖] Grid search failed. Please check the logs.", "red")
-        return
+    # --- Step 4: Launch the Grid Search Loop ---
+    for n_nodes in neuron_counts:
+        print_color(f"\n--- Starting Grid Search for {n_nodes} nodes ---", "purple")
+        
+        # Dynamically create the save path for the best model from this run
+        config_name = Path(user_input['config_path']).stem
+        save_path = f"training/outputs/{config_name}_{n_nodes}_nodes_best.npz"
+
+        ssh_command = [
+            "ssh", "-t",
+            "-i", os.path.expanduser(user_input['key_path']),
+            "-p", ssh_details['port'],
+            ssh_details['uri'],
+            (
+                f"cd /root/MemoryCapacitorTopologies && "
+                f"OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 "
+                f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py "
+                f"{user_input['config_path']} --n-nodes {n_nodes} --save-path {save_path}"
+            )
+        ]
+        
+        if not run_command(ssh_command, f"Grid Search ({n_nodes} nodes)"):
+            print_color(f"[✖] Grid search for {n_nodes} nodes failed. Check logs.", "red")
+            # Decide if you want to continue with the next loop or stop
+            # continue 
+            return # Stop on first failure
+
 
     # --- Step 5: Retrieve Results ---
     if not run_command(['python', 'remote/pull_outputs.py'], "Retrieving Results"):
