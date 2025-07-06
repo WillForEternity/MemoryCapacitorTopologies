@@ -143,9 +143,11 @@ def main():
         "-p", ssh_details['port'],
         ssh_details['uri'],
         (
-            f"cd /root/MemoryCapacitorTopologies && "
-            f"OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 "
-            f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}"
+            f"script -q -c '" \
+            f"cd /root/MemoryCapacitorTopologies && " \
+            f"OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 " \
+            f"/root/miniconda/envs/rc/bin/python -u experiments/grid_search.py {user_input['config_path']}" \
+            f"' /dev/null"
         )
     ]
     if not run_command(ssh_command, "Launching Grid Search"):
