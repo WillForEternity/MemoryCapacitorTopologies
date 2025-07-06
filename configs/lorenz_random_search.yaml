@@ -31,6 +31,6 @@ param_grid:
 
 search_options:
   workers: 16            # tune based on CPU cores on the pod
-  target_mse: 10.0       # early-stop threshold implemented in grid_search.py
+  target_mse: 0.01      # early-stop threshold implemented in grid_search.py
   save_best: "best_lorenz.npz"
   plot_best: true
