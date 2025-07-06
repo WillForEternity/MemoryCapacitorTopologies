@@ -105,24 +105,7 @@ The command loads the saved `.npz`, re-trains (if desired), and writes fresh fig
 
 ---
 
-## 6  Why This Grid Search Is Fast & Stable
-
-Behind the scenes the codebase applies several optimisations so the 432-job Lorenz sweep completes in minutes rather than hours:
-
-| Feature | File | Purpose |
-|---------|------|---------|
-| **Vectorised reservoir kernel** | `training/train.py` | Uses batched linear algebra on the GPU instead of Python loops. |
-| `torch.set_num_threads(1)` per worker | `experiments/grid_search.py` | Prevents CPU thread thrashing when Python spawns many processes. |
-| **CUDA auto-select** | Everywhere | All tensors are created directly on `cuda` when available – no costly `.to(device)` after the fact. |
-| `torch.linalg.lstsq` | `training/train.py` | Replaces `torch.linalg.solve` to gracefully handle singular/ill-conditioned matrices. |
-| **Early-stopping on target MSE** | `experiments/grid_search.py` | Optional `target_mse` in the YAML stops the sweep as soon as the metric is good enough, cancelling the remaining futures. |
-| **Real-time logging + traceback relay** | `experiments/grid_search.py` | Worker stdout/stderr is flushed and any exception is sent back so you never debug blindly. |
-
-Together these tweaks mean you can hammer a single A100 with hundreds of parameter combinations and still get the answer quickly.
-
----
-
-## 7  Common Issues & Fixes
+## 6  Common Issues & Fixes
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
@@ -151,64 +134,46 @@ Enjoy your accelerated hyper-parameter sweeps!  🎉
 
 ---
 
-## Appendix A — Exact Command Log (Working Session)
+## The Road to a Perfect Grid Search: A Step-by-Step History
 
-Below is the **verbatim** sequence of commands that produced the 432-job Lorenz sweep on `runpod_gpu1`.  Lines starting with `#` are comments you can omit when copy-pasting.
+The final, perfected command you ran is the result of a detailed, iterative process of debugging and optimization. This section documents that journey, explaining the key problems we solved to get from a failing script to a fast, robust, and fully automated workflow.
+
+### The Perfected Command
 
 ```bash
-##########  LOCAL  ##########
-# 1.  Generate / verify SSH key
-ssh-keygen -t ed25519 -C "my_runpod_key" -f ~/.ssh/id_ed25519    # skip if key exists
-cat ~/.ssh/id_ed25519.pub                     # copy this for RunPod dashboard
-
-# 2.  Create pods.yml entry (edit accordingly)
-cat > remote/pods.yml <<'EOF'
-runpod_gpu1:
-  host: 157.157.221.29
-  port: 23202
-  user: root
-  key: ~/.ssh/id_ed25519
-EOF
-
-# 3.  One-time automated bootstrap (installs conda, clones repo, etc.)
-python remote/setup.py --pod runpod_gpu1
-
-##########  REMOTE (SSH) ##########
-# 4.  Verify GPU & env
-ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "nvidia-smi"
-ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "source ~/miniforge3/etc/profile.d/conda.sh && conda activate rc && python -c 'import torch, yaml, numpy; print(torch.cuda.is_available())'"
-
-# 5.  (Optional) update repo to latest commit & dependencies
-ssh -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
-  cd ~/MemoryCapacitorTopologies && git pull && \
-  source ~/miniforge3/etc/profile.d/conda.sh && conda activate rc && \
-  pip install -r requirements.txt --quiet"
-
-# 6.  Run the grid search (unbuffered, real-time logs)
 ssh -t -i ~/.ssh/id_ed25519 -p 23202 root@157.157.221.29 "\
-  cd ~/MemoryCapacitorTopologies && \
-  /root/miniforge3/envs/rc/bin/python -u experiments/grid_search.py \
-      --config configs/lorenz_search.yaml \
-      --workers 8"
-
-##########  LOCAL  ##########
-# 7.  Pull outputs after the run completes (idempotent)
-python remote/pull_outputs.py --pod runpod_gpu1
-
-# 8.  Inspect / plot locally
-python -m training.train --config configs/best_lorenz_config.yaml --plot
-
-# 9.  (Optional) commit best artefacts to git, then push
-#     Only do this **after** verifying plots & metrics locally.
+  cd /root/MemoryCapacitorTopologies && \
+  /root/miniconda/envs/rc/bin/python -u experiments/grid_search.py --config configs/lorenz_search.yaml --workers 8"
 ```
 
-**Important flags & rationale**
+Here’s how we made every part of that command work perfectly:
 
-| Flag / command | Why |
-|----------------|-----|
-| `-u` on python  | Forces unbuffered stdout so you see progress live in SSH session. |
-| `--workers 8`  | Matches the *physical* CPU cores on an 8-vCPU RunPod GPU instance. Adjust if your pod has fewer / more cores. |
-| `torch.set_num_threads(1)` (in code) | Ensures each worker uses a single CPU thread, avoiding oversubscription. |
+### Step 1: Solving Instability and Crashes
 
-That’s it—if you can run the nine blocks above without error, you will replicate the exact grid-search run that yielded `val_mse ≈ 1.47 × 10³` in minutes.
+*   **Problem:** The initial grid search was unstable. It frequently crashed due to `TypeError` and `singular matrix` errors in PyTorch.
+*   **Investigation:** We added detailed logging to the `_ridge_regression` function. The logs revealed two root causes:
+    1.  The regularization parameter, `lam`, was being read from the YAML config as a string (e.g., `'1e-5'`) instead of a `float`, causing a `TypeError`.
+    2.  For some hyper-parameters, `torch.linalg.solve` was failing on ill-conditioned matrices.
+*   **Solution:**
+    1.  We added an explicit `float()` cast to the `lam` parameter inside the training script.
+    2.  We replaced the sensitive `torch.linalg.solve` with the more numerically stable `torch.linalg.lstsq`, which gracefully handles these edge cases.
 
+### Step 2: Achieving True Parallelism
+
+*   **Problem:** Even when the script ran, it wasn't significantly faster with more workers. The CPU was thrashing, with processes competing for resources instead of running in parallel.
+*   **Investigation:** This is a classic PyTorch multiprocessing issue. By default, PyTorch tries to use multiple threads per process, which leads to massive overhead when you're also using multiple processes.
+*   **Solution:** We added `torch.set_num_threads(1)` at the beginning of each worker's execution. This forces each of the 8 worker processes onto a single CPU core, eliminating thread contention and enabling true, efficient parallelism.
+
+### Step 3: Enabling Real-Time Debugging
+
+*   **Problem:** It was impossible to debug on the remote pod because `print` statements and logs would only appear after the entire script finished. This was caused by Python's default output buffering.
+*   **Investigation:** We found that using `conda run` was a primary cause of the buffering.
+*   **Solution:** The perfected command bypasses `conda run` and invokes the Python interpreter directly from the conda environment's `bin` path. We also added the `-u` flag to ensure unbuffered output.
+    *   **This is the key to the command:** `/root/miniconda/envs/rc/bin/python -u ...` ensures every `print` statement and log message appears on your local terminal in real-time.
+
+### Step 4: Adding Early Stopping (Your Contribution!)
+
+*   **Problem:** The grid search would always run through all 432 combinations, even if a great result was found early on.
+*   **Solution:** You implemented an elegant early-stopping mechanism. By adding a `target_mse` to the config, the script now monitors the best validation score and automatically cancels all remaining jobs once the target is met, saving significant time and compute cost.
+
+By systematically identifying and fixing these issues, we transformed the grid search from a broken, slow, and opaque script into the highly optimized, robust, and transparent workflow you have today.
