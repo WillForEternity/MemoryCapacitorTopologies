@@ -153,14 +153,15 @@ def main():
         sys.exit(1)
 
     # --- Step 2: Kill Lingering Remote Processes ---
+    # The remote server requires a TTY for all commands, so we run this interactively.
     kill_command = [
-        "ssh", "-T",  # Disable pseudo-tty allocation for non-interactive command
+        "ssh", "-t", # Force TTY allocation
         "-i", os.path.expanduser(user_input['key_path']),
         "-p", ssh_details['port'], ssh_details['uri'],
         # Wrap in bash -c for robustness
-        "bash -c \"pkill -f 'grid_search.py' || true\""
+        "bash -c \"pkill -f 'grid_search.py' || true; echo 'Remote processes cleaned.'\""
     ]
-    if not run_command(kill_command, "Cleaning Remote Processes"):
+    if not run_command(kill_command, "Cleaning Remote Processes", interactive=True):
         sys.exit(1)
 
     # --- Step 3: Provision the Remote Server ---
