@@ -2,6 +2,7 @@ import argparse
 import os
 import pty
 import re
+import select
 import subprocess
 import sys
 import yaml
@@ -24,26 +25,53 @@ def print_color(text, color):
     sys.stdout.flush()
 
 def run_command(command, step_name, interactive=False, prefix_output=True):
-    """Runs a command, streaming output. For interactive commands, uses a PTY."""
+    """Runs a command, streaming output. For interactive commands, uses a robust, manually-managed PTY."""
     print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
     try:
         if interactive:
-            # Use pty.spawn for commands that require a real TTY (like tqdm).
-            # This directly connects the subprocess to our terminal, which is the
-            # key to making the progress bar render correctly in-place.
-            return_code = pty.spawn(command)
+            # Use a manually managed PTY for full, unbuffered control. This is the
+            # definitive fix for the server's non-standard SSH behavior.
+            master_fd, slave_fd = pty.openpty()
+
+            process = subprocess.Popen(
+                command,
+                preexec_fn=os.setsid,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                text=False  # Work with bytes for raw PTY I/O
+            )
+            os.close(slave_fd)
+
+            try:
+                while process.poll() is None:
+                    r, _, _ = select.select([master_fd], [], [], 0.1)
+                    if r:
+                        try:
+                            data = os.read(master_fd, 1024)
+                            if data:
+                                sys.stdout.buffer.write(data)
+                                sys.stdout.buffer.flush()
+                            else:
+                                break  # EOF
+                        except OSError:
+                            break # PTY closed
+            finally:
+                os.close(master_fd)
+
+            return_code = process.wait()
             if return_code != 0:
                 print_color(f"\n[✖] Command failed with exit code {return_code}.", "red")
                 return False
         else:
-            # Use subprocess.Popen for standard, non-interactive commands.
+            # Standard non-interactive command execution
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             if prefix_output:
                 prefix = f"[{step_name}] | "
                 for line in iter(process.stdout.readline, ''):
                     sys.stdout.write(f"{prefix}{line.rstrip()}\n")
                     sys.stdout.flush()
-            else: # Stream raw output, for scripts that have their own formatting
+            else: # Stream raw output
                 for line in iter(process.stdout.readline, ''):
                     sys.stdout.write(line)
                     sys.stdout.flush()
