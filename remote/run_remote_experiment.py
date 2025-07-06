@@ -28,7 +28,7 @@ def run_command(command, step_name):
     """Runs a command, streaming its output. For the grid search, uses a PTY."""
     print_color(f"\n[STEP {step_name}] Running: {' '.join(command)}", "yellow")
     try:
-        if step_name == "Launching Grid Search":
+        if "Grid Search" in step_name:
             # Use a manually managed PTY for full, unbuffered control over I/O.
             # This is the key to making remote tqdm work correctly.
             master_fd, slave_fd = pty.openpty()

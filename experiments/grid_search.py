@@ -95,7 +95,8 @@ def _run_single(cfg: Dict[str, Any], worker_status: Dict[int, str], stop_early_e
 def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event, num_workers):
     """A thread to manage the live display of worker statuses."""
     while not stop_event.is_set():
-        sys.stdout.write('\x1b[2J\x1b[H')  # ANSI codes to clear screen and move to top-left
+        # \x1b[2J clears the screen, \x1b[H moves cursor to top-left
+        sys.stdout.write('\x1b[2J\x1b[H') 
         
         completed = completed_ref.value
         best_mse = best_mse_ref.value
@@ -105,16 +106,17 @@ def _display_status(status_dict, total, completed_ref, best_mse_ref, stop_event,
         
         sys.stdout.write(header + '\n')
         sys.stdout.write(progress + '\n')
-        sys.stdout.write('-' * (len(progress) if len(progress) > len(header) else len(header)) + '\n')
+        sys.stdout.write('-' * (len(progress)) + '\n')
         sys.stdout.write("\n--- Worker Activity ---\n")
 
         active_workers = list(status_dict.items())
         for i in range(num_workers):
             if i < len(active_workers):
                 pid, desc = active_workers[i]
-                sys.stdout.write(f"Worker {i+1:02d} (PID {pid}): {desc}\n")
+                # Use rjust and ljust to pad and align text, and clear the rest of the line with \x1b[K
+                sys.stdout.write(f"Worker {i+1:02d} (PID {pid}): {desc.ljust(80)}\x1b[K\n")
             else:
-                sys.stdout.write(f"Worker {i+1:02d} (PID -----): Idle\n")
+                sys.stdout.write(f"Worker {i+1:02d} (PID -----): {'Idle'.ljust(80)}\x1b[K\n")
         
         sys.stdout.flush()
         time.sleep(0.5)
