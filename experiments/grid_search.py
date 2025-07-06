@@ -24,6 +24,7 @@ import os
 import multiprocessing
 import threading
 import time
+import copy
 
 import numpy as np
 import yaml
@@ -127,7 +128,7 @@ def run_grid(config_path: str):
     param_combos = [dict(zip(keys, v)) for v in itertools.product(*values)]
     run_configs = []
     for combo in param_combos:
-        cfg = base_cfg.copy()
+        cfg = copy.deepcopy(base_cfg)
         for key, value in combo.items():
             set_nested(cfg, key, value)
         run_configs.append(cfg)
